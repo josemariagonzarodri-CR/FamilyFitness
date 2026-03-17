@@ -103,8 +103,6 @@ export default function App() {
   const [workoutData, setWorkoutData] = useState({}) 
   const [timerDescanso, setTimerDescanso] = useState(0)
   const intervalRef = useRef(null)
-  
-  // NUEVO ESTADO: Controla la navegación Maestro-Detalle
   const [ejercicioExpandido, setEjercicioExpandido] = useState(null)
 
   const hoy = new Date();
@@ -121,6 +119,14 @@ export default function App() {
     } catch(e) { return dateStr; }
   }
 
+  const getValorConvertido = (valor, desdeUnidad) => {
+    if (!valor) return '';
+    const num = parseFloat(valor);
+    if (isNaN(num)) return '';
+    if (desdeUnidad === 'kg') return (num * 2.20462).toFixed(1).replace(/\.0$/, '') + ' lbs';
+    return (num / 2.20462).toFixed(1).replace(/\.0$/, '') + ' kg';
+  }
+
   const [formNombre, setFormNombre] = useState('Fuerza Base')
   const [formFecha, setFormFecha] = useState(fDate(hoy))
   const [formSemanas, setFormSemanas] = useState(6)
@@ -131,6 +137,7 @@ export default function App() {
   const [catReps, setCatReps] = useState(10)
   const [catDescanso, setCatDescanso] = useState(60)
   const [catTipo, setCatTipo] = useState('fuerza') 
+  const [catPeso, setCatPeso] = useState('') // NUEVO: Campo de peso en el catálogo
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
 
   const triggerHaptic = () => { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); }
@@ -259,8 +266,29 @@ export default function App() {
   const agregarEjercicioCatalogo = async (e) => {
     e.preventDefault(); triggerHaptic();
     if(!catEj) return alert("Escribe un ejercicio");
-    const { error } = await supabase.from('catalogo_rutina').insert([{ programa_id: programaActivo.id, dia_asignado: catDia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo }]);
-    if(!error) { setCatEj(''); const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); if (cat) setCatalogo(cat); }
+
+    // Guardado de Peso Objetivo
+    let pesoSQL = 0;
+    if (catTipo === 'fuerza' && catPeso !== '') {
+       const val = parseFloat(catPeso) || 0;
+       pesoSQL = unidad === 'lbs' ? (val / 2.20462) : val;
+    }
+
+    const { error } = await supabase.from('catalogo_rutina').insert([{ 
+      programa_id: programaActivo.id, 
+      dia_asignado: catDia, 
+      nombre_ejercicio: catEj, 
+      series_objetivo: catSeries, 
+      reps_objetivo: catReps.toString(), 
+      descanso_segundos: catDescanso, 
+      tipo_ejercicio: catTipo,
+      peso_objetivo: pesoSQL 
+    }]);
+    if(!error) { 
+      setCatEj(''); setCatPeso('');
+      const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); 
+      if (cat) setCatalogo(cat); 
+    }
   }
 
   const eliminarEjercicioCatalogo = async (idEjercicio) => { triggerHaptic(); await supabase.from('catalogo_rutina').delete().eq('id', idEjercicio); const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); if (cat) setCatalogo(cat); }
@@ -307,15 +335,22 @@ export default function App() {
   }
 
   const iniciarEntrenamiento = () => {
-    triggerHaptic(); setEjercicioExpandido(null); // Resetea la navegación
+    triggerHaptic(); setEjercicioExpandido(null); 
     const ejHoy = catalogo.filter(c => c.dia_asignado === diaToca);
     const dataInicial = {};
     ejHoy.forEach(ej => {
       const nameKey = ej.nombre_ejercicio.trim().toUpperCase();
       const maxPeso_kg = metricas[nameKey]?.maxPeso || 0; 
       let pesoSugerido = '';
-      if (ej.tipo_ejercicio === 'cardio_tiempo') { pesoSugerido = 0; } 
-      else { if (maxPeso_kg > 0) pesoSugerido = unidad === 'lbs' ? (maxPeso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : maxPeso_kg; }
+      if (ej.tipo_ejercicio === 'cardio_tiempo') { 
+         pesoSugerido = 0; 
+      } else { 
+         // Aquí inyectamos tu Peso Objetivo si es que no hay historial previo
+         const pesoBaseKg = maxPeso_kg > 0 ? maxPeso_kg : (ej.peso_objetivo || 0);
+         if (pesoBaseKg > 0) {
+             pesoSugerido = unidad === 'lbs' ? (pesoBaseKg * 2.20462).toFixed(1).replace(/\.0$/, '') : pesoBaseKg;
+         }
+      }
       dataInicial[ej.id] = Array.from({ length: ej.series_objetivo }, () => ({ peso: pesoSugerido, reps: ej.reps_objetivo, completado: false, tipoSerie: 'N' }));
     });
     setEjerciciosHoy(ejHoy); setWorkoutData(dataInicial); setView('workout'); 
@@ -542,7 +577,8 @@ export default function App() {
                       </div>
                       <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : "Ej. Elíptica, Caminadora..."} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600" />
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Series</label>
                         <select value={catSeries} onChange={e => {setCatSeries(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white focus:border-cyan-400/50">
@@ -555,6 +591,15 @@ export default function App() {
                           {[...Array(90)].map((_, i) => (<option key={i+1} value={i+1} className="bg-slate-900">{i + 1}</option>))}
                         </select>
                       </div>
+                      
+                      {/* ESTE ES TU NUEVO CAMPO DE PESO MANDATORIO */}
+                      {catTipo === 'fuerza' && (
+                        <div>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Peso Base</label>
+                          <input type="number" value={catPeso} onChange={e => setCatPeso(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white outline-none focus:border-cyan-400/50 transition-colors placeholder-slate-600" placeholder={`Ej. 20 ${unidad}`} />
+                        </div>
+                      )}
+
                       <div>
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Desc (s)</label>
                         <select value={catDescanso} onChange={e => {setCatDescanso(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white focus:border-cyan-400/50">
@@ -582,7 +627,11 @@ export default function App() {
                               <span className="bg-cyan-500/20 text-cyan-400 text-[10px] font-black px-2 py-1 rounded-md">DÍA {ej.dia_asignado}</span>
                               <span className="font-bold text-white text-sm">{ej.nombre_ejercicio}</span>
                             </div>
-                            <div className={`text-xs font-bold ml-12 ${esCardio ? 'text-rose-400/80' : 'text-slate-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {esCardio?'min':'reps'} {ej.descanso_segundos>0 && `• ⏱️${ej.descanso_segundos}s`}</div>
+                            <div className={`text-xs font-bold ml-12 ${esCardio ? 'text-rose-400/80' : 'text-slate-400'}`}>
+                              {ej.series_objetivo}x{ej.reps_objetivo} {esCardio?'min':'reps'} 
+                              {!esCardio && ej.peso_objetivo > 0 && ` • Base: ${unidad === 'lbs' ? (ej.peso_objetivo * 2.20462).toFixed(1).replace(/\.0$/, '') : ej.peso_objetivo} ${unidad}`}
+                              {ej.descanso_segundos>0 && ` • ⏱️${ej.descanso_segundos}s`}
+                            </div>
                           </div>
                           <button onClick={() => eliminarEjercicioCatalogo(ej.id)} className="w-10 h-10 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
                         </div>
@@ -910,7 +959,6 @@ export default function App() {
             </div>
           </div>
           
-          {/* Botón Flotante para finalizar en Celular (Solo aparece si estás en la vista Maestro) */}
           {!ejercicioExpandido && (
              <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-10 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)]">✅ Finalizar Rutina</button>
           )}
@@ -918,4 +966,4 @@ export default function App() {
       )}
     </AppWrapper>
   )
-}
+} 
