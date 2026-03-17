@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
+import { db } from './db' // NUEVO: Importamos el motor de base de datos local (Dexie)
 
 const PremiumStyles = () => (
   <style>{`
@@ -80,6 +81,10 @@ export default function App() {
   const [unidad, setUnidad] = useState('kg') 
   const [mostrarConversion, setMostrarConversion] = useState(true)
 
+  // NUEVOS ESTADOS DE RED (OFFLINE-FIRST)
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [pendingSyncs, setPendingSyncs] = useState(0);
+
   const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', content: '' })
   const openInfo = (title, content) => { triggerHaptic(); setInfoModal({ isOpen: true, title, content }); }
   const InfoIcon = ({ title, content }) => (
@@ -137,19 +142,82 @@ export default function App() {
   const [catReps, setCatReps] = useState(10)
   const [catDescanso, setCatDescanso] = useState(60)
   const [catTipo, setCatTipo] = useState('fuerza') 
-  const [catPeso, setCatPeso] = useState('') // NUEVO: Campo de peso en el catálogo
+  const [catPeso, setCatPeso] = useState('') 
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
 
   const triggerHaptic = () => { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); }
 
+  // ==========================================
+  // MOTOR DE SINCRONIZACIÓN OFFLINE (DEXIE)
+  // ==========================================
+  const checkPendingData = async () => {
+    try {
+      const count = await db.sesionesPendientes.count();
+      setPendingSyncs(count);
+    } catch (e) { console.log("Error leyendo Dexie", e); }
+  }
+
+  const syncDataToCloud = async () => {
+    if (!navigator.onLine) return;
+    try {
+      const pendientes = await db.sesionesPendientes.toArray();
+      if (pendientes.length === 0) return;
+
+      for (const pSesion of pendientes) {
+        // Subir Sesion a Supabase
+        const { data: newSession, error: sessionError } = await supabase.from('sesiones_familiares').insert([{
+          email_usuario: pSesion.email_usuario, es_asistencia: pSesion.es_asistencia, programa_id: pSesion.programa_id, dia_rutina: pSesion.dia_rutina, fecha_registro: pSesion.fecha_registro
+        }]).select().single();
+
+        if (!sessionError && newSession) {
+          const pSeries = await db.seriesPendientes.where('sesion_local_id').equals(pSesion.id).toArray();
+          const ejerciciosNombres = [...new Set(pSeries.map(s => s.nombre_ejercicio))];
+          
+          for (const nombreEj of ejerciciosNombres) {
+            const serieRef = pSeries.find(s => s.nombre_ejercicio === nombreEj);
+            const { data: newEj } = await supabase.from('ejercicios_rutina').insert([{ 
+              sesion_id: newSession.id, nombre_ejercicio: nombreEj, tipo_ejercicio: serieRef.tipo_ejercicio 
+            }]).select().single();
+
+            if (newEj) {
+              const seriesToInsert = pSeries.filter(s => s.nombre_ejercicio === nombreEj).map(s => ({
+                ejercicio_id: newEj.id, numero_serie: s.numero_serie, peso_kg: s.peso_kg, repeticiones: s.repeticiones, tipo_serie: s.tipo_serie
+              }));
+              await supabase.from('series_ejercicio').insert(seriesToInsert);
+            }
+          }
+          // Limpiar el búnker una vez subido con éxito
+          await db.seriesPendientes.where('sesion_local_id').equals(pSesion.id).delete();
+          await db.sesionesPendientes.delete(pSesion.id);
+        }
+      }
+      checkPendingData();
+      if(session?.user?.email) cargarPrograma(session.user.email); // Refresca las gráficas
+    } catch (e) { console.log("Error en sincronización", e); }
+  }
+
+  // ==========================================
+  // INICIALIZACIÓN Y LISTENERS
+  // ==========================================
   useEffect(() => {
+    // Listeners de Red
+    const handleOnline = () => { setIsOnline(true); syncDataToCloud(); };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    checkPendingData();
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session); if(session?.user?.email) cargarPrograma(session.user.email);
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session); if(session?.user?.email) cargarPrograma(session.user.email); else setView('login');
     })
-    return () => { subscription.unsubscribe(); detenerTimer(); }
+    return () => { 
+      subscription.unsubscribe(); detenerTimer(); 
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    }
   }, [])
 
   const cargarPrograma = async (userEmail) => {
@@ -267,7 +335,6 @@ export default function App() {
     e.preventDefault(); triggerHaptic();
     if(!catEj) return alert("Escribe un ejercicio");
 
-    // Guardado de Peso Objetivo
     let pesoSQL = 0;
     if (catTipo === 'fuerza' && catPeso !== '') {
        const val = parseFloat(catPeso) || 0;
@@ -275,14 +342,7 @@ export default function App() {
     }
 
     const { error } = await supabase.from('catalogo_rutina').insert([{ 
-      programa_id: programaActivo.id, 
-      dia_asignado: catDia, 
-      nombre_ejercicio: catEj, 
-      series_objetivo: catSeries, 
-      reps_objetivo: catReps.toString(), 
-      descanso_segundos: catDescanso, 
-      tipo_ejercicio: catTipo,
-      peso_objetivo: pesoSQL 
+      programa_id: programaActivo.id, dia_asignado: catDia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo, peso_objetivo: pesoSQL 
     }]);
     if(!error) { 
       setCatEj(''); setCatPeso('');
@@ -345,7 +405,6 @@ export default function App() {
       if (ej.tipo_ejercicio === 'cardio_tiempo') { 
          pesoSugerido = 0; 
       } else { 
-         // Aquí inyectamos tu Peso Objetivo si es que no hay historial previo
          const pesoBaseKg = maxPeso_kg > 0 ? maxPeso_kg : (ej.peso_objetivo || 0);
          if (pesoBaseKg > 0) {
              pesoSugerido = unidad === 'lbs' ? (pesoBaseKg * 2.20462).toFixed(1).replace(/\.0$/, '') : pesoBaseKg;
@@ -382,29 +441,76 @@ export default function App() {
     });
   }
 
+  // ==========================================
+  // LA CÚPULA DE GUARDADO (CLOUD & OFFLINE FAIL-SAFE)
+  // ==========================================
   const finalizarEntrenamientoHoy = async () => {
     triggerHaptic(); detenerTimer();
     const dateIso = new Date(fechaRegistro + 'T12:00:00Z').toISOString();
-    const { data: newSession, error: sessionError } = await supabase.from('sesiones_familiares').insert([{ email_usuario: session.user.email, es_asistencia: true, programa_id: programaActivo.id, dia_rutina: diaToca, fecha_registro: dateIso }]).select().single();
-    if (sessionError) return alert("Fallo de comunicación con la base de datos.");
     
+    // Preparar y filtrar datos reales completados
+    const ejerciciosConData = [];
     for (const ej of ejerciciosHoy) {
       const sets = workoutData[ej.id] || [];
       const completedSets = sets.filter(s => s.completado); 
-      if (completedSets.length > 0) {
-          const { data: newEj } = await supabase.from('ejercicios_rutina').insert([{ sesion_id: newSession.id, nombre_ejercicio: ej.nombre_ejercicio, tipo_ejercicio: ej.tipo_ejercicio || 'fuerza' }]).select().single();
-          if (newEj) {
-              const seriesToInsert = completedSets.map((s, index) => {
-                  const valorDigitado = parseFloat(s.peso) || 0;
-                  const pesoParaSQL = (ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
-                  return { ejercicio_id: newEj.id, numero_serie: index + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N' };
-              });
-              await supabase.from('series_ejercicio').insert(seriesToInsert);
+      if (completedSets.length > 0) ejerciciosConData.push({ ej, completedSets });
+    }
+
+    if (ejerciciosConData.length === 0) {
+      alert("⚠️ No has marcado ninguna serie como completada.");
+      return;
+    }
+
+    let savedToCloud = false;
+
+    // INTENTO 1: LA NUBE (Supabase)
+    if (isOnline) {
+      try {
+        const { data: newSession, error: sessionError } = await supabase.from('sesiones_familiares').insert([{ email_usuario: session.user.email, es_asistencia: true, programa_id: programaActivo.id, dia_rutina: diaToca, fecha_registro: dateIso }]).select().single();
+        
+        if (!sessionError && newSession) {
+          for (const item of ejerciciosConData) {
+              const { data: newEj } = await supabase.from('ejercicios_rutina').insert([{ sesion_id: newSession.id, nombre_ejercicio: item.ej.nombre_ejercicio, tipo_ejercicio: item.ej.tipo_ejercicio || 'fuerza' }]).select().single();
+              if (newEj) {
+                  const seriesToInsert = item.completedSets.map((s, index) => {
+                      const valorDigitado = parseFloat(s.peso) || 0;
+                      const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
+                      return { ejercicio_id: newEj.id, numero_serie: index + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N' };
+                  });
+                  await supabase.from('series_ejercicio').insert(seriesToInsert);
+              }
           }
+          savedToCloud = true;
+          alert("🏆 ¡Sesión guardada en la Bóveda de Titanio (Nube)!");
+        }
+      } catch(e) { console.log("Fallo la nube, activando búnker", e); }
+    }
+
+    // INTENTO 2: EL BÚNKER (Si no hay internet o Supabase falló)
+    if (!savedToCloud) {
+      try {
+        const localSessionId = await db.sesionesPendientes.add({ email_usuario: session.user.email, es_asistencia: true, programa_id: programaActivo.id, dia_rutina: diaToca, fecha_registro: dateIso, estado_sync: 'pendiente' });
+        
+        for (const item of ejerciciosConData) {
+            for(let i=0; i<item.completedSets.length; i++) {
+                const s = item.completedSets[i];
+                const valorDigitado = parseFloat(s.peso) || 0;
+                const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
+                await db.seriesPendientes.add({
+                    sesion_local_id: localSessionId, nombre_ejercicio: item.ej.nombre_ejercicio, tipo_ejercicio: item.ej.tipo_ejercicio || 'fuerza', numero_serie: i + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N'
+                });
+            }
+        }
+        alert("📡 Sin conexión. Tu sesión está en el Búnker Local. Subirá automáticamente al detectar WiFi/4G.");
+        checkPendingData();
+      } catch(e) {
+        alert("❌ Error crítico: No se pudo guardar ni en la nube ni localmente.");
       }
     }
-    alert("🏆 ¡Sesión guardada en la Bóveda de Titanio!");
-    setFechaRegistro(fDate(hoy)); cargarPrograma(session.user.email); setView('dashboard');
+
+    setFechaRegistro(fDate(hoy)); 
+    if(savedToCloud && session?.user?.email) cargarPrograma(session.user.email); 
+    setView('dashboard');
   }
 
   const iniciarTimer = (segundos) => {
@@ -425,6 +531,10 @@ export default function App() {
 
   const TopBarControles = () => (
     <div className="flex gap-2 items-center flex-wrap justify-center z-50">
+      <div className={`text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl flex items-center gap-1.5 border ${isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+         <span className={`w-2 h-2 rounded-full ${isOnline ? (pendingSyncs > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400') : 'bg-amber-500'}`}></span>
+         {isOnline ? (pendingSyncs > 0 ? `${pendingSyncs} PENDIENTES` : 'NUBE ACTIVA') : 'MODO BÚNKER'}
+      </div>
       <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-4 py-2 rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
       <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
       <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all">Salir</button>
@@ -592,7 +702,6 @@ export default function App() {
                         </select>
                       </div>
                       
-                      {/* ESTE ES TU NUEVO CAMPO DE PESO MANDATORIO */}
                       {catTipo === 'fuerza' && (
                         <div>
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Peso Base</label>
@@ -850,7 +959,6 @@ export default function App() {
                 </div>
               ) : (
                 !ejercicioExpandido ? (
-                  // VISTA MAESTRO (Resumen de Ejercicios)
                   <div className="space-y-4 animate-fade-in flex-1">
                      <div className="flex justify-between items-center mb-6 px-2">
                         <h3 className="text-slate-500 font-black uppercase tracking-widest text-xs">Resumen de Operaciones</h3>
@@ -876,7 +984,6 @@ export default function App() {
                      })}
                   </div>
                 ) : (
-                  // VISTA DETALLE (Un Solo Ejercicio Expandido)
                   <div className="animate-fade-in flex flex-col flex-1">
                     <button onClick={() => { setEjercicioExpandido(null); triggerHaptic(); }} className="mb-6 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors w-full md:w-fit px-6 py-4 md:py-3 bg-white/5 rounded-2xl border border-white/5 shadow-lg active:scale-95">
                       ← Volver a la Lista
@@ -966,4 +1073,4 @@ export default function App() {
       )}
     </AppWrapper>
   )
-} 
+}
