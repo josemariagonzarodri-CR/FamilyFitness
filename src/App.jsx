@@ -7,10 +7,11 @@ const PremiumStyles = () => (
   <style>{`
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-fade-in { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     .animate-fade-in-fast { animation: fadeIn 0.2s ease-out forwards; }
     .stagger-1 { animation-delay: 100ms; opacity: 0; }
     .stagger-2 { animation-delay: 200ms; opacity: 0; }
+    .stagger-3 { animation-delay: 300ms; opacity: 0; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -18,6 +19,10 @@ const PremiumStyles = () => (
     body { overscroll-behavior-y: none; }
   `}</style>
 )
+
+// ICONOS MODERNOS SVG
+const ActivityIcon = () => <svg className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+const ChartIcon = () => <svg className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
 
 const playBeep = (freq = 440, duration = 200, type = 'sine') => {
   try {
@@ -78,9 +83,7 @@ export default function App() {
   const [token, setToken] = useState('')
   const [step, setStep] = useState('email')
   const [view, setView] = useState('login')
-  
-  // NUEVO ESTADO: Control de Pestañas del Dashboard
-  const [dashTab, setDashTab] = useState('resumen') // 'resumen' | 'analiticas'
+  const [dashTab, setDashTab] = useState('resumen')
 
   const [loading, setLoading] = useState(false)
   const [unidad, setUnidad] = useState('kg') 
@@ -530,6 +533,7 @@ export default function App() {
          {isOnline ? (pendingSyncs > 0 ? `${pendingSyncs} PEND.` : 'NUBE') : 'BÚNKER'}
       </div>
       <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
+      <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
       <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">Salir</button>
     </div>
   )
@@ -780,7 +784,7 @@ export default function App() {
 
       {view === 'dashboard' && (() => {
         
-        // --- CALCULOS DE CUMPLIMIENTO SEMANAL (ROLLING 7 DAYS) ---
+        // --- CALCULOS DE CUMPLIMIENTO SEMANAL ---
         const date7DaysAgo = new Date();
         date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
         const asistenciasUltimos7Dias = historialActivo.filter(h => h.es_asistencia && new Date(h.fecha_registro) >= date7DaysAgo).length;
@@ -807,21 +811,23 @@ export default function App() {
               <TopBarControles />
             </div>
 
-            {/* NUEVA BARRA DE PESTAÑAS */}
+            {/* BARRA DE PESTAÑAS */}
             <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6 md:mb-10 w-full max-w-md mx-auto md:mx-0 animate-fade-in">
-              <button onClick={() => {setDashTab('resumen'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${dashTab === 'resumen' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>🏋️ Entrenamiento</button>
-              <button onClick={() => {setDashTab('analiticas'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${dashTab === 'analiticas' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>📊 Analíticas</button>
+              <button onClick={() => {setDashTab('resumen'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center ${dashTab === 'resumen' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                <ActivityIcon /> Entrenar
+              </button>
+              <button onClick={() => {setDashTab('analiticas'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center ${dashTab === 'analiticas' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+                <ChartIcon /> Analíticas
+              </button>
             </div>
 
             {/* ========================================================= */}
-            {/* PESTAÑA 1: ENTRENAMIENTO (Limpia y enfocada en la acción) */}
+            {/* PESTAÑA 1: ENTRENAMIENTO */}
             {/* ========================================================= */}
             {dashTab === 'resumen' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
-                {/* COLUMNA IZQUIERDA: Metas y Cumplimiento */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
-                  
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <div className="flex justify-between text-[9px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 items-center">
                       <span>Progreso Total <InfoIcon title="Progreso" content="Sesiones completadas vs faltantes del plan actual."/></span>
@@ -831,7 +837,7 @@ export default function App() {
                         <div className="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(6,182,212,0.5)]" style={{ width: `${progresoPct}%` }}></div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="grid grid-cols-2 gap-3 mb-2">
                       <div className="bg-white/5 p-3 rounded-xl border border-white/5">
                         <div className="text-[8px] md:text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Teórico <InfoIcon title="Fin Teórico" content="Si vas todos los días sin fallar."/></div>
                         <div className="font-black text-xs md:text-sm text-white">{formatDisplayDate(programaActivo.fecha_fin_teorica)}</div>
@@ -841,44 +847,16 @@ export default function App() {
                         <div className="font-black text-xs md:text-sm text-red-300">{formatDisplayDate(programaActivo.fecha_fin_estimada)}</div>
                       </div>
                     </div>
-
-                    {/* NUEVO: CUMPLIMIENTO SEMANAL */}
-                    <div className="pt-4 border-t border-white/5">
-                       <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-3 items-center">
-                          <span className="text-slate-500 flex items-center">Cumplimiento (Últimos 7 Días) <InfoIcon title="Cumplimiento" content="Cuantas sesiones has hecho en los últimos 7 días vs tu meta de frecuencia semanal."/></span>
-                          <span className={`${cumplimientoPct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{asistenciasUltimos7Dias} / {metaSemanal} Días</span>
-                       </div>
-                       <div className="w-full bg-black/50 rounded-full h-2 border border-white/5 p-0.5">
-                           <div className={`h-full rounded-full transition-all duration-1000 ${cumplimientoPct >= 100 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'}`} style={{ width: `${cumplimientoPct}%` }}></div>
-                       </div>
-                    </div>
                   </div>
-
                 </div>
 
-                {/* COLUMNA DERECHA: Arsenal y Acción */}
                 <div className="md:col-span-6 flex flex-col gap-4 md:gap-5">
-                  
-                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
-                    <div className="relative">
-                      <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
-                        📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
-                      </div>
-                      <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </div>
-                  </div>
-
                   <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
                       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
                         {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                          <button 
-                            key={i} 
-                            onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} 
-                            className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${diaToca === i + 1 ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}
-                          >
+                          <button key={i} onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${diaToca === i + 1 ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>
                             Día {i + 1}
                           </button>
                         ))}
@@ -901,24 +879,31 @@ export default function App() {
                     )}
                     <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 md:gap-3">
-                    <button onClick={() => {setView('create_program'); triggerHaptic();}} className="col-span-2 py-3.5 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
-                    <button onClick={exportarDatosCSV} className="py-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 CSV</button>
-                    <button onClick={registrarAusencia} className="py-3.5 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Ausencia </button>
-                  </div>
                 </div>
               </div>
             )}
 
 
             {/* ========================================================= */}
-            {/* PESTAÑA 2: ANALÍTICAS (Gráficas y Logs) */}
+            {/* PESTAÑA 2: ANALÍTICAS */}
             {/* ========================================================= */}
             {dashTab === 'analiticas' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
+                {/* Analiticas Izquierda */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
+                  
+                  {/* CUMPLIMIENTO SEMANAL MIGRADO */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                    <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-4 items-center">
+                        <span className="text-slate-500 flex items-center">Cumplimiento (Últimos 7 Días) <InfoIcon title="Cumplimiento" content="Cuantas sesiones has hecho en los últimos 7 días vs tu meta semanal."/></span>
+                        <span className={`${cumplimientoPct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{asistenciasUltimos7Dias} / {metaSemanal} Días</span>
+                    </div>
+                    <div className="w-full bg-black/50 rounded-full h-2 md:h-3 border border-white/5 p-0.5">
+                        <div className={`h-full rounded-full transition-all duration-1000 ${cumplimientoPct >= 100 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'}`} style={{ width: `${cumplimientoPct}%` }}></div>
+                    </div>
+                  </div>
+
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                       Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
@@ -950,11 +935,43 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Analiticas Derecha */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
-                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex-1 h-[400px] md:h-[600px] flex flex-col">
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-5 flex items-center">
-                      Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
-                    </label>
+                  
+                  {/* NUEVA MÉTRICA: Mapa de Recuperación Muscular */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">
+                        Estado de Recuperación Muscular <InfoIcon title="Fatiga Neural" content="100% = Descansado. Basado en tus sesiones de las últimas 48 horas."/>
+                     </label>
+                     <div className="space-y-4 mt-6">
+                        {Object.entries(fatiga).map(([musculo, valor]) => (
+                           <div key={musculo}>
+                              <div className="flex justify-between text-[9px] md:text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">
+                                 <span>{musculo}</span>
+                                 <span className={valor < 50 ? 'text-amber-400' : 'text-emerald-400'}>{valor}%</span>
+                              </div>
+                              <div className="w-full bg-black/50 rounded-full h-1.5 border border-white/5">
+                                  <div className={`h-full rounded-full transition-all duration-1000 ${valor < 50 ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'}`} style={{ width: `${valor}%` }}></div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* FIX LOG DE TRANSACCIONES: Altura Máxima Flexible */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col max-h-[500px]">
+                    <div className="flex justify-between items-center mb-4 md:mb-5">
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">
+                        Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
+                      </label>
+                      <div className="relative">
+                        <div className="text-cyan-400 text-[9px] font-black tracking-widest hover:text-cyan-300 transition-colors cursor-pointer bg-cyan-500/10 px-3 py-1.5 rounded-lg border border-cyan-500/20">
+                           + INSERTAR
+                        </div>
+                        <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                      </div>
+                    </div>
+
                     <div className="overflow-y-auto pr-2 space-y-2 md:space-y-3 no-scrollbar flex-1">
                       {historialActivo.length === 0 ? (
                         <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
@@ -1017,6 +1034,12 @@ export default function App() {
                         })
                       )}
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 md:gap-3">
+                    <button onClick={() => {setView('create_program'); triggerHaptic();}} className="col-span-2 py-3.5 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
+                    <button onClick={exportarDatosCSV} className="py-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 CSV</button>
+                    <button onClick={registrarAusencia} className="py-3.5 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Ausencia </button>
                   </div>
                 </div>
 
