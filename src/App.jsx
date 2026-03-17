@@ -553,7 +553,6 @@ export default function App() {
     </div>
   )
 
-  // FIX CRÍTICO: Tooltips renderizados como funciones puras
   const renderTooltipArea = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -815,7 +814,7 @@ export default function App() {
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
         
-        // --- COHORTES SEMANALES (ENGINE DE BI) ---
+        // --- COHORTES SEMANALES ---
         let cohortesSemanales = [];
         let semanaActualNum = 1;
         let statusSemanaActual = { asistencias: 0, meta: 1, pct: 0 };
@@ -950,15 +949,14 @@ export default function App() {
 
 
             {/* ========================================================= */}
-            {/* PESTAÑA 2: ANALÍTICAS (Centro de Comando BI) */}
+            {/* PESTAÑA 2: ANALÍTICAS */}
             {/* ========================================================= */}
             {dashTab === 'analiticas' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
-                {/* Columna Analíticas Izquierda */}
+                {/* Analiticas Izquierda */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* ESTADO DE LA SEMANA ACTUAL */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-4 items-center">
                         <span className="text-slate-500 flex items-center">Progreso de la Semana {semanaActualNum} <InfoIcon title="Cumplimiento" content="Basado en tu fecha de inicio."/></span>
@@ -969,7 +967,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* GRÁFICO BARCHART DE CUMPLIMIENTO SEMANAL */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                       Disciplina Semanal Histórica <InfoIcon title="Disciplina" content="Verde: Completaste la meta. Naranja: A medias. Gris: Faltaste."/>
@@ -1021,10 +1018,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Columna Analíticas Derecha */}
+                {/* Analiticas Derecha */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* MAPA DE RECUPERACIÓN MUSCULAR */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">
                         Estado de Recuperación Muscular <InfoIcon title="Fatiga Neural" content="100% = Descansado. Basado en tus sesiones de las últimas 48 horas."/>
@@ -1044,9 +1040,10 @@ export default function App() {
                      </div>
                   </div>
 
-                  {/* EL NUEVO LOG DE TRANSACCIONES POR COHORTES (ACORDEONES) */}
-                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col flex-1 h-[500px]">
-                    <div className="flex justify-between items-center mb-4 md:mb-5">
+                  {/* FIX LOG DE TRANSACCIONES: Altura mínima y protección de scroll */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col min-h-[450px] lg:h-[600px]">
+                    
+                    <div className="flex justify-between items-center mb-4 md:mb-5 shrink-0">
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">
                         Log de Transacciones <InfoIcon title="Cohortes Semanales" content="Tus sesiones agrupadas por semana desde el inicio del programa."/>
                       </label>
