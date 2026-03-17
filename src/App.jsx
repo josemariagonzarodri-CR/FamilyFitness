@@ -558,7 +558,7 @@ export default function App() {
   const renderTooltipArea = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
+        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl z-50 relative">
           <p className="text-white font-bold text-xs uppercase tracking-widest mb-1">{label}</p>
           <p className="text-cyan-400 font-black">{`${payload[0].value} ${unidad}`}</p>
         </div>
@@ -570,7 +570,7 @@ export default function App() {
   const renderTooltipBar = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
+        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl z-50 relative">
           <p className="text-white font-bold text-xs uppercase tracking-widest mb-1">{label}</p>
           <p className="text-cyan-400 font-black">{`${payload[0].value}% Cumplimiento`}</p>
         </div>
@@ -922,7 +922,7 @@ export default function App() {
                   
                   {/* UX FIX: Máquina del Tiempo Restaurada en Pestaña Entrenamiento */}
                   <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento antes de iniciarlo."/></label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Entrenamiento <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu sesión antes de iniciar."/></label>
                     <div className="relative">
                       <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
                         📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
@@ -965,13 +965,13 @@ export default function App() {
 
 
             {/* ========================================================= */}
-            {/* PESTAÑA 2: ANALÍTICAS */}
+            {/* PESTAÑA 2: ANALÍTICAS (Jerarquía Top-Down) */}
             {/* ========================================================= */}
             {dashTab === 'analiticas' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
+              <div className="space-y-6 md:space-y-8 animate-fade-in">
                 
-                <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
-                  
+                {/* FILA 1: KPIs RÁPIDOS (Presente) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-4 items-center">
                         <span className="text-slate-500 flex items-center">Progreso de la Semana {semanaActualNum} <InfoIcon title="Cumplimiento" content="Basado en tu fecha de inicio."/></span>
@@ -982,6 +982,28 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">
+                        Estado de Recuperación Muscular <InfoIcon title="Fatiga Neural" content="100% = Descansado. Basado en tus sesiones de las últimas 48 horas."/>
+                     </label>
+                     <div className="space-y-4 mt-6">
+                        {Object.entries(fatiga).map(([musculo, valor]) => (
+                           <div key={musculo}>
+                              <div className="flex justify-between text-[9px] md:text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">
+                                 <span>{musculo}</span>
+                                 <span className={valor < 50 ? 'text-amber-400' : 'text-emerald-400'}>{valor}%</span>
+                              </div>
+                              <div className="w-full bg-black/50 rounded-full h-1.5 border border-white/5">
+                                  <div className={`h-full rounded-full transition-all duration-1000 ${valor < 50 ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'}`} style={{ width: `${valor}%` }}></div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+                </div>
+
+                {/* FILA 2: TENDENCIAS (Pasado) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                       Disciplina Semanal Histórica <InfoIcon title="Disciplina" content="Verde: Completaste la meta. Naranja: A medias. Gris: Faltaste."/>
@@ -1033,132 +1055,105 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
+                {/* FILA 3: LA BÓVEDA DE DATOS CRUDOS (Full Width, sin calendarios extraños) */}
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col h-[500px] md:h-[650px] overflow-hidden">
                   
-                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
-                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">
-                        Estado de Recuperación Muscular <InfoIcon title="Fatiga Neural" content="100% = Descansado. Basado en tus sesiones de las últimas 48 horas."/>
-                     </label>
-                     <div className="space-y-4 mt-6">
-                        {Object.entries(fatiga).map(([musculo, valor]) => (
-                           <div key={musculo}>
-                              <div className="flex justify-between text-[9px] md:text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">
-                                 <span>{musculo}</span>
-                                 <span className={valor < 50 ? 'text-amber-400' : 'text-emerald-400'}>{valor}%</span>
-                              </div>
-                              <div className="w-full bg-black/50 rounded-full h-1.5 border border-white/5">
-                                  <div className={`h-full rounded-full transition-all duration-1000 ${valor < 50 ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'}`} style={{ width: `${valor}%` }}></div>
-                              </div>
-                           </div>
-                        ))}
-                     </div>
+                  <div className="flex justify-between items-center mb-4 md:mb-5 shrink-0">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">
+                      Log de Transacciones en Crudo <InfoIcon title="Cohortes Semanales" content="Tus sesiones agrupadas por semana. Solo lectura."/>
+                    </label>
                   </div>
 
-                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col h-[500px] md:h-[650px] overflow-hidden">
-                    
-                    <div className="flex justify-between items-center mb-4 md:mb-5 shrink-0">
-                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">
-                        Log de Transacciones <InfoIcon title="Cohortes Semanales" content="Tus sesiones agrupadas por semana."/>
-                      </label>
-                      <div className="relative">
-                        <div className="text-cyan-400 text-[9px] font-black tracking-widest hover:text-cyan-300 transition-colors cursor-pointer bg-cyan-500/10 px-3 py-1.5 rounded-lg border border-cyan-500/20">
-                           + INSERTAR
-                        </div>
-                        <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                      </div>
-                    </div>
+                  <div className="overflow-y-auto pr-2 space-y-3 no-scrollbar h-full pb-6">
+                    {semanasConData.length === 0 ? (
+                      <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
+                    ) : (
+                      semanasConData.map(cohorte => {
+                        const isExpanded = semanaExpandida === cohorte.semana;
+                        const volTotalDisplay = unidad === 'lbs' ? (cohorte.volumenTotal * 2.20462).toFixed(0) : Math.round(cohorte.volumenTotal);
+                        
+                        let headerColor = "text-slate-400 bg-white/5 border-white/5";
+                        if (cohorte.cumplimientoPct >= 100) headerColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+                        else if (cohorte.cumplimientoPct > 0) headerColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
 
-                    <div className="overflow-y-auto pr-2 space-y-3 no-scrollbar h-full pb-6">
-                      {semanasConData.length === 0 ? (
-                        <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
-                      ) : (
-                        semanasConData.map(cohorte => {
-                          const isExpanded = semanaExpandida === cohorte.semana;
-                          const volTotalDisplay = unidad === 'lbs' ? (cohorte.volumenTotal * 2.20462).toFixed(0) : Math.round(cohorte.volumenTotal);
-                          
-                          let headerColor = "text-slate-400 bg-white/5 border-white/5";
-                          if (cohorte.cumplimientoPct >= 100) headerColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
-                          else if (cohorte.cumplimientoPct > 0) headerColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
+                        return (
+                          <div key={`sem-${cohorte.semana}`} className="bg-black/30 border border-white/5 rounded-2xl flex flex-col transition-colors group">
+                             
+                             <div className={`flex justify-between items-center cursor-pointer p-4 rounded-2xl transition-all border ${headerColor}`} onClick={() => toggleSemanaLog(cohorte.semana)}>
+                                <div>
+                                   <div className="font-black text-xs md:text-sm uppercase tracking-widest mb-1">
+                                      SEMANA {cohorte.semana}
+                                   </div>
+                                   <div className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest flex gap-3">
+                                      <span>✓ {cohorte.asistencias} Sesiones</span>
+                                      <span>⚡ Vol: {volTotalDisplay} {unidad}</span>
+                                   </div>
+                                </div>
+                                <div className="font-black text-[10px]">{isExpanded ? '▲' : '▼'}</div>
+                             </div>
 
-                          return (
-                            <div key={`sem-${cohorte.semana}`} className="bg-black/30 border border-white/5 rounded-2xl flex flex-col transition-colors group">
-                               
-                               <div className={`flex justify-between items-center cursor-pointer p-4 rounded-2xl transition-all border ${headerColor}`} onClick={() => toggleSemanaLog(cohorte.semana)}>
-                                  <div>
-                                     <div className="font-black text-xs md:text-sm uppercase tracking-widest mb-1">
-                                        SEMANA {cohorte.semana}
-                                     </div>
-                                     <div className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest flex gap-3">
-                                        <span>✓ {cohorte.asistencias} Sesiones</span>
-                                        <span>⚡ Vol: {volTotalDisplay} {unidad}</span>
-                                     </div>
-                                  </div>
-                                  <div className="font-black text-[10px]">{isExpanded ? '▲' : '▼'}</div>
-                               </div>
-
-                               {isExpanded && (
-                                  <div className="p-3 space-y-2 animate-fade-in-fast">
-                                     {cohorte.sesiones.map(sesion => {
-                                        const isDayExpanded = logExpandido === sesion.id;
-                                        const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
-                                        
-                                        return (
-                                          <div key={sesion.id} className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col hover:border-white/10 transition-colors">
-                                            <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
-                                              <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                  <span className={`text-[8px] md:text-[9px] font-black px-2 py-0.5 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
-                                                  <span className="font-bold text-slate-300 text-[10px] md:text-xs">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
-                                                </div>
-                                                {sesion.es_asistencia && (
-                                                  <div className="text-[9px] text-slate-500 font-bold ml-1">Total: <span className="text-slate-400 ml-1">{tonelajeDisplay} {unidad}</span></div>
-                                                )}
+                             {isExpanded && (
+                                <div className="p-3 space-y-2 animate-fade-in-fast">
+                                   {cohorte.sesiones.map(sesion => {
+                                      const isDayExpanded = logExpandido === sesion.id;
+                                      const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
+                                      
+                                      return (
+                                        <div key={sesion.id} className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col hover:border-white/10 transition-colors">
+                                          <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
+                                            <div>
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <span className={`text-[8px] md:text-[9px] font-black px-2 py-0.5 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
+                                                <span className="font-bold text-slate-300 text-[10px] md:text-xs">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
                                               </div>
-                                              <div className="flex items-center gap-3">
-                                                <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
-                                              </div>
+                                              {sesion.es_asistencia && (
+                                                <div className="text-[9px] text-slate-500 font-bold ml-1">Total: <span className="text-slate-400 ml-1">{tonelajeDisplay} {unidad}</span></div>
+                                              )}
                                             </div>
-
-                                            {isDayExpanded && sesion.es_asistencia && (
-                                              <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
-                                                {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
-                                                  const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
-                                                  return (
-                                                    <div key={ejIdx} className="bg-black/40 rounded-lg p-2 border border-white/5">
-                                                      <div className="flex justify-between items-center mb-2">
-                                                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
-                                                      </div>
-                                                      <div className="space-y-1">
-                                                        {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
-                                                          const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
-                                                          const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
-                                                          return (
-                                                            <div key={sIdx} className="flex justify-between text-[8px] md:text-[9px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
-                                                              <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
-                                                              {isCardio ? (
-                                                                <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
-                                                              ) : (
-                                                                <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
-                                                              )}
-                                                            </div>
-                                                          )
-                                                        })}
-                                                      </div>
-                                                    </div>
-                                                  )
-                                                })}
-                                              </div>
-                                            )}
+                                            <div className="flex items-center gap-3">
+                                              <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
+                                            </div>
                                           </div>
-                                        )
-                                     })}
-                                  </div>
-                               )}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
+
+                                          {isDayExpanded && sesion.es_asistencia && (
+                                            <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
+                                              {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
+                                                const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                                                return (
+                                                  <div key={ejIdx} className="bg-black/40 rounded-lg p-2 border border-white/5">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                      <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                      {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
+                                                        const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
+                                                        const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
+                                                        return (
+                                                          <div key={sIdx} className="flex justify-between text-[8px] md:text-[9px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
+                                                            <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
+                                                            {isCardio ? (
+                                                              <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
+                                                            ) : (
+                                                              <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
+                                                            )}
+                                                          </div>
+                                                        )
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                   })}
+                                </div>
+                             )}
+                          </div>
+                        )
+                      })
+                    )}
                   </div>
                 </div>
 
