@@ -156,6 +156,8 @@ export default function App() {
   const [catSeries, setCatSeries] = useState(3)
   const [catReps, setCatReps] = useState(10)
   const [catDescanso, setCatDescanso] = useState(60)
+  
+  // TERCERA MODALIDAD HABILITADA ('solo_reps')
   const [catTipo, setCatTipo] = useState('fuerza') 
   const [catPeso, setCatPeso] = useState('') 
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
@@ -258,15 +260,22 @@ export default function App() {
             
             if (ej.series_ejercicio && ej.series_ejercicio.length > 0) {
               const seriesValidas = ej.series_ejercicio.filter(s => s.tipo_serie === 'N' || !s.tipo_serie);
+              
+              // Solo la fuerza suma al volumen total
               if (tipoEj === 'fuerza') {
                 seriesValidas.forEach(serie => {
                   tonelaje_kg += (serie.peso_kg * serie.repeticiones);
                   if (serie.peso_kg > statsEjGlobal[nameKey].maxPeso) statsEjGlobal[nameKey].maxPeso = serie.peso_kg; 
                 });
               }
+              
+              // Textos fantasmas adaptados a las 3 modalidades
               if (sesion.es_asistencia && !fantasmasPrevios[nameKey] && seriesValidas.length > 0) {
                 if (tipoEj === 'cardio_tiempo') {
                   fantasmasPrevios[nameKey] = `${seriesValidas[0].repeticiones} min @ Nivel ${seriesValidas[0].peso_kg}`;
+                } else if (tipoEj === 'solo_reps') {
+                  const maxReps = Math.max(...seriesValidas.map(s => s.repeticiones));
+                  fantasmasPrevios[nameKey] = `${seriesValidas.length} sets (Max: ${maxReps} reps)`;
                 } else {
                   const maxPesoSesion = Math.max(...seriesValidas.map(s => s.peso_kg));
                   const repsOfMax = seriesValidas.find(s => s.peso_kg === maxPesoSesion)?.repeticiones || 0;
@@ -357,6 +366,10 @@ export default function App() {
        const val = parseFloat(catPeso) || 0;
        pesoSQL = unidad === 'lbs' ? (val / 2.20462) : val;
     }
+    // Si es solo reps o cardio, forzamos el peso objetivo a 0 para limpieza de base de datos
+    if (catTipo === 'solo_reps' || catTipo === 'cardio_tiempo') {
+       pesoSQL = 0;
+    }
 
     const inserts = catDias.map(dia => ({
       programa_id: programaActivo.id, dia_asignado: dia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo, peso_objetivo: pesoSQL 
@@ -422,7 +435,7 @@ export default function App() {
       const nameKey = ej.nombre_ejercicio.trim().toUpperCase();
       const maxPeso_kg = metricas[nameKey]?.maxPeso || 0; 
       let pesoSugerido = '';
-      if (ej.tipo_ejercicio === 'cardio_tiempo') { 
+      if (ej.tipo_ejercicio === 'cardio_tiempo' || ej.tipo_ejercicio === 'solo_reps') { 
          pesoSugerido = 0; 
       } else { 
          const pesoBaseKg = maxPeso_kg > 0 ? maxPeso_kg : (ej.peso_objetivo || 0);
@@ -489,7 +502,8 @@ export default function App() {
               if (newEj) {
                   const seriesToInsert = item.completedSets.map((s, index) => {
                       const valorDigitado = parseFloat(s.peso) || 0;
-                      const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
+                      // Si es solo reps, aseguramos que el peso guardado sea 0
+                      const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo' || item.ej.tipo_ejercicio === 'solo_reps') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
                       return { ejercicio_id: newEj.id, numero_serie: index + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N' };
                   });
                   await supabase.from('series_ejercicio').insert(seriesToInsert);
@@ -509,7 +523,7 @@ export default function App() {
             for(let i=0; i<item.completedSets.length; i++) {
                 const s = item.completedSets[i];
                 const valorDigitado = parseFloat(s.peso) || 0;
-                const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
+                const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo' || item.ej.tipo_ejercicio === 'solo_reps') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
                 await db.seriesPendientes.add({
                     sesion_local_id: localSessionId, nombre_ejercicio: item.ej.nombre_ejercicio, tipo_ejercicio: item.ej.tipo_ejercicio || 'fuerza', numero_serie: i + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N'
                 });
@@ -735,13 +749,15 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* BOTONERA DE 3 MODALIDADES (Fuerza, Corporal, Cardio) */}
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 block">Modalidad de Ejercicio</label>
                       <div className="flex gap-2 mb-3 md:mb-4">
-                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
-                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio/Tiempo</button>
+                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
+                        <button type="button" onClick={() => setCatTipo('solo_reps')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'solo_reps' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Solo Reps</button>
+                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio</button>
                       </div>
-                      <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : "Ej. Elíptica, Caminadora..."} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600 text-sm md:text-base" />
+                      <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : (catTipo === 'solo_reps' ? "Ej. Abdominales, Flexiones..." : "Ej. Elíptica...")} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600 text-sm md:text-base" />
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3 md:gap-4">
@@ -752,7 +768,7 @@ export default function App() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">{catTipo === 'fuerza' ? 'Reps' : 'Minutos'}</label>
+                        <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">{catTipo === 'cardio_tiempo' ? 'Minutos' : 'Reps'}</label>
                         <select value={catReps} onChange={e => {setCatReps(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-2 py-3 md:py-3.5 font-bold text-center text-white focus:border-cyan-400/50 text-sm md:text-base">
                           {[...Array(90)].map((_, i) => (<option key={i+1} value={i+1} className="bg-slate-900">{i + 1}</option>))}
                         </select>
@@ -784,7 +800,8 @@ export default function App() {
                       <div className="text-slate-500 text-xs md:text-sm italic text-center py-8 md:py-10">Aún no hay ejercicios cargados.</div>
                     ) : (
                       catalogo.map(ej => {
-                        const esCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                        const isC = ej.tipo_ejercicio === 'cardio_tiempo';
+                        const isR = ej.tipo_ejercicio === 'solo_reps';
                         return (
                         <div key={ej.id} className="bg-white/5 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex justify-between items-center hover:border-white/20 transition-colors">
                           <div>
@@ -792,9 +809,10 @@ export default function App() {
                               <span className="bg-cyan-500/20 text-cyan-400 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md">DÍA {ej.dia_asignado}</span>
                               <span className="font-bold text-white text-xs md:text-sm">{ej.nombre_ejercicio}</span>
                             </div>
-                            <div className={`text-[10px] md:text-xs font-bold ml-10 md:ml-12 ${esCardio ? 'text-rose-400/80' : 'text-slate-400'}`}>
-                              {ej.series_objetivo}x{ej.reps_objetivo} {esCardio?'min':'reps'} 
-                              {!esCardio && ej.peso_objetivo > 0 && ` • Base: ${unidad === 'lbs' ? (ej.peso_objetivo * 2.20462).toFixed(1).replace(/\.0$/, '') : ej.peso_objetivo} ${unidad}`}
+                            <div className={`text-[10px] md:text-xs font-bold ml-10 md:ml-12 ${isC ? 'text-rose-400/80' : (isR ? 'text-emerald-400/80' : 'text-slate-400')}`}>
+                              {ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':'reps'} 
+                              {!isC && !isR && ej.peso_objetivo > 0 && ` • Base: ${unidad === 'lbs' ? (ej.peso_objetivo * 2.20462).toFixed(1).replace(/\.0$/, '') : ej.peso_objetivo} ${unidad}`}
+                              {isR && ` • Corporal`}
                               {ej.descanso_segundos>0 && ` • ⏱️${ej.descanso_segundos}s`}
                             </div>
                           </div>
@@ -816,7 +834,6 @@ export default function App() {
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
         
-        // --- COHORTES SEMANALES ---
         let cohortesSemanales = [];
         let semanaActualNum = 1;
         let statusSemanaActual = { asistencias: 0, meta: 1, pct: 0 };
@@ -890,8 +907,6 @@ export default function App() {
             </div>
 
             {/* ========================================================= */}
-            {/* PESTAÑA 1: ENTRENAMIENTO */}
-            {/* ========================================================= */}
             {dashTab === 'resumen' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
@@ -919,18 +934,18 @@ export default function App() {
                 </div>
 
                 <div className="md:col-span-6 flex flex-col gap-4 md:gap-5">
-                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
-                    
-                    <div className="mb-4 md:mb-6">
-                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Entrenamiento <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu sesión."/></label>
-                      <div className="relative">
-                        <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
-                          📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
-                        </div>
-                        <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  
+                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Entrenamiento <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu sesión."/></label>
+                    <div className="relative">
+                      <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
+                        📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
                       </div>
+                      <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
+                  </div>
 
+                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
                       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
@@ -946,10 +961,11 @@ export default function App() {
                       <ul className="space-y-2 md:space-y-3 mb-4 md:mb-6">
                         {resumenEjerciciosHoy.map(ej => {
                           const isC = ej.tipo_ejercicio === 'cardio_tiempo';
+                          const isR = ej.tipo_ejercicio === 'solo_reps';
                           return (
                           <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl md:rounded-2xl border border-white/5">
                             <span className="font-bold text-xs md:text-sm text-white">{ej.nombre_ejercicio}</span>
-                            <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400':'text-cyan-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':''}</span>
+                            <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400' : (isR ? 'text-emerald-400' : 'text-cyan-400')}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':'reps'}</span>
                           </li>
                         )})}
                       </ul>
@@ -959,7 +975,6 @@ export default function App() {
                     <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
                   </div>
 
-                  {/* UX FIX: Botones Operativos Restaurados */}
                   <div className="pt-4 md:pt-6 border-t border-white/5 grid grid-cols-2 gap-2 md:gap-3">
                     <button onClick={() => {setView('create_program'); triggerHaptic();}} className="col-span-2 py-3.5 md:py-4 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
                     <button onClick={exportarDatosCSV} className="py-3.5 md:py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 Exportar CSV</button>
@@ -971,8 +986,6 @@ export default function App() {
             )}
 
 
-            {/* ========================================================= */}
-            {/* PESTAÑA 2: ANALÍTICAS */}
             {/* ========================================================= */}
             {dashTab === 'analiticas' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
@@ -1124,10 +1137,12 @@ export default function App() {
                                               <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
                                                 {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
                                                   const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                                                  const isRepsOnly = ej.tipo_ejercicio === 'solo_reps';
+                                                  
                                                   return (
                                                     <div key={ejIdx} className="bg-black/40 rounded-lg p-2 border border-white/5">
                                                       <div className="flex justify-between items-center mb-2">
-                                                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
+                                                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider ${isCardio?'text-rose-400':(isRepsOnly?'text-emerald-400':'text-cyan-400')}`}>{ej.nombre_ejercicio}</span>
                                                       </div>
                                                       <div className="space-y-1">
                                                         {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
@@ -1138,6 +1153,8 @@ export default function App() {
                                                               <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
                                                               {isCardio ? (
                                                                 <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
+                                                              ) : isRepsOnly ? (
+                                                                <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-emerald-400">Corporal</span></span>
                                                               ) : (
                                                                 <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
                                                               )}
@@ -1232,11 +1249,12 @@ export default function App() {
                     {ejerciciosHoy.filter(e => e.id === ejercicioExpandido).map((ej) => {
                       const prKey = ej.nombre_ejercicio.trim().toUpperCase();
                       const esCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                      const esRepsOnly = ej.tipo_ejercicio === 'solo_reps';
                       const textoRendimientoAnterior = rendimientoPrevio[prKey];
                       const setsCompletados = workoutData[ej.id]?.filter(s => s.completado && s.tipoSerie === 'N') || [];
                       
                       let max1RM_kg = 0;
-                      if (!esCardio) {
+                      if (!esCardio && !esRepsOnly) {
                         setsCompletados.forEach(set => {
                           const peso_kg = unidad === 'lbs' ? (parseFloat(set.peso) || 0) / 2.20462 : (parseFloat(set.peso) || 0);
                           const rm = calcular1RM(peso_kg, set.reps);
@@ -1254,7 +1272,7 @@ export default function App() {
                                 <button onClick={() => openBiomecanica(ej.nombre_ejercicio)} className="bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-cyan-500/30 transition-all active:scale-95 flex items-center gap-1"><span className="text-xs md:text-sm">🧬</span> Guía</button>
                               </div>
                               {textoRendimientoAnterior && (
-                                 <div className="bg-white/5 border border-white/10 text-slate-400 text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg flex items-center gap-1.5 md:gap-2">👻 Última: {textoRendimientoAnterior} {esCardio?'':'kg'}</div>
+                                 <div className="bg-white/5 border border-white/10 text-slate-400 text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg flex items-center gap-1.5 md:gap-2">👻 Última: {textoRendimientoAnterior} {esCardio?'':(esRepsOnly?'':'kg')}</div>
                               )}
                             </div>
                             <p className="text-[10px] md:text-xs text-slate-500 font-bold mt-2 md:mt-3 tracking-[0.1em]">Objetivo: {ej.series_objetivo}x{ej.reps_objetivo} <span className="ml-2 text-cyan-400/70">• ⏱️ {ej.descanso_segundos}s</span></p>
@@ -1263,7 +1281,7 @@ export default function App() {
                           <div className="space-y-2 md:space-y-3 flex-1">
                             <div className="flex text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-1 md:px-2 mb-1 md:mb-2 gap-2">
                               <div className="w-12 md:w-16 text-center">Set <InfoIcon title="Tipos de Serie" content="N = Normal, W = Calentamiento (No suma a métricas), D = Drop-set"/></div>
-                              <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Nivel/Vel' : `Peso (${unidad})`}</div>
+                              <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Nivel/Vel' : (esRepsOnly ? 'Modalidad' : `Peso (${unidad})`)}</div>
                               <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Minutos' : 'Reps'}</div>
                               <div className="w-12 md:w-14 text-center">Status</div>
                             </div>
@@ -1280,10 +1298,18 @@ export default function App() {
                                   {i + 1} <span className="text-[7px] md:text-[9px] mt-0.5">{set.tipoSerie}</span>
                                 </button>
 
-                                <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
-                                  <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
-                                  {mostrarConversion && set.peso && !esCardio && !set.completado && (<span className="text-[8px] text-cyan-500/50 absolute bottom-1 font-bold tracking-widest pointer-events-none">{getValorConvertido(set.peso, unidad)}</span>)}
-                                </div>
+                                {/* UX UPDATE: Ocultar input de peso si es "Solo Reps" */}
+                                {esRepsOnly ? (
+                                   <div className="flex-1 flex flex-col items-center justify-center bg-black/10 rounded-lg h-12 overflow-hidden border border-white/5">
+                                      <span className="text-[10px] md:text-xs font-bold text-emerald-500/80 uppercase tracking-widest">Corporal</span>
+                                   </div>
+                                ) : (
+                                   <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
+                                     <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
+                                     {mostrarConversion && set.peso && !esCardio && !set.completado && (<span className="text-[8px] text-cyan-500/50 absolute bottom-1 font-bold tracking-widest pointer-events-none">{getValorConvertido(set.peso, unidad)}</span>)}
+                                   </div>
+                                )}
+
                                 <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
                                   <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
                                 </div>
@@ -1295,10 +1321,10 @@ export default function App() {
 
                           <div className="mt-6 md:mt-8 pt-4 md:pt-6 border-t border-white/5 flex justify-between items-center bg-black/20 p-3 md:p-4 rounded-xl md:rounded-2xl">
                             <span className="text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
-                              {!esCardio ? <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></> : 'Modo Cardio'}
+                              {esCardio ? 'Modo Cardio' : (esRepsOnly ? 'Modo Calistenia' : <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></>)}
                             </span>
-                            <span className={`text-xs md:text-sm font-black ${esCardio ? 'text-rose-400' : 'text-emerald-400'}`}>
-                              {!esCardio ? (display1RM ? `${display1RM} ${unidad}` : '--') : '❤️ Z2/Z3'}
+                            <span className={`text-xs md:text-sm font-black ${esCardio ? 'text-rose-400' : (esRepsOnly ? 'text-emerald-400' : 'text-emerald-400')}`}>
+                              {esCardio ? '❤️ Z2/Z3' : (esRepsOnly ? '🦾 Peso Corporal' : (display1RM ? `${display1RM} ${unidad}` : '--'))}
                             </span>
                           </div>
                         </div>
