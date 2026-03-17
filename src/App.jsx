@@ -6,10 +6,11 @@ const PremiumStyles = () => (
   <style>{`
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-fade-in { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     .animate-fade-in-fast { animation: fadeIn 0.2s ease-out forwards; }
     .stagger-1 { animation-delay: 100ms; opacity: 0; }
     .stagger-2 { animation-delay: 200ms; opacity: 0; }
+    .stagger-3 { animation-delay: 300ms; opacity: 0; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -111,8 +112,6 @@ export default function App() {
   const [ejercicioExpandido, setEjercicioExpandido] = useState(null)
 
   const hoy = new Date();
-  const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
-  const antier = new Date(hoy); antier.setDate(antier.getDate() - 2);
   const fDate = (d) => d.toISOString().split('T')[0];
   
   const formatDisplayDate = (dateStr) => {
@@ -264,9 +263,13 @@ export default function App() {
         historialGlobalLimpio.push({ ...sesion, tonelaje: tonelaje_kg });
         if (sesion.es_asistencia && sesion.fecha_registro) {
           const fechaSesionStr = sesion.fecha_registro.substring(0, 10);
+          const fHoy = fDate(hoy);
+          const fAyer = new Date(hoy); fAyer.setDate(fAyer.getDate() - 1);
+          const fAntier = new Date(hoy); fAntier.setDate(fAntier.getDate() - 2);
+
           musculosTocados.forEach(m => {
-            if (fechaSesionStr === fDate(hoy)) musculosFatigaGlobal[m] = 0; 
-            else if (fechaSesionStr === fDate(ayer) || fechaSesionStr === fDate(antier)) musculosFatigaGlobal[m] = Math.min(musculosFatigaGlobal[m], 50);
+            if (fechaSesionStr === fHoy) musculosFatigaGlobal[m] = 0; 
+            else if (fechaSesionStr === fDate(fAyer) || fechaSesionStr === fDate(fAntier)) musculosFatigaGlobal[m] = Math.min(musculosFatigaGlobal[m], 50);
           });
         }
       });
@@ -617,15 +620,11 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
-                    <div className="flex gap-2 md:gap-3">
-                      <button type="button" onClick={() => {setFormFecha(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm transition-all duration-300 ${formFecha === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Hoy</button>
-                      <button type="button" onClick={() => {setFormFecha(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm transition-all duration-300 ${formFecha === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Ayer</button>
-                      <div className="flex-1 relative">
-                        <div className={`w-full h-full py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(formFecha)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
-                          📅 {![fDate(hoy), fDate(ayer)].includes(formFecha) ? formatDisplayDate(formFecha) : 'Pasada'}
-                        </div>
-                        <input type="date" value={formFecha} onChange={(e) => setFormFecha(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <div className="relative">
+                      <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
+                        📅 {formatDisplayDate(formFecha)}
                       </div>
+                      <input type="date" value={formFecha} onChange={(e) => {setFormFecha(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
                   </div>
               </div>
@@ -874,26 +873,25 @@ export default function App() {
 
               <div className="md:col-span-5 flex flex-col gap-4 md:gap-5 animate-fade-in stagger-2">
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
-                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Para registrar un día pasado."/></label>
-                  <div className="flex gap-2">
-                    <button onClick={() => {setFechaRegistro(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs transition-all duration-300 ${fechaRegistro === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Hoy</button>
-                    <button onClick={() => {setFechaRegistro(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs transition-all duration-300 ${fechaRegistro === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Ayer</button>
-                    <div className="flex-1 relative">
-                      <div className={`w-full h-full py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(fechaRegistro)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
-                        📅 {![fDate(hoy), fDate(ayer)].includes(fechaRegistro) ? formatDisplayDate(fechaRegistro) : 'Pasada'}
-                      </div>
-                      <input type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
+                  <div className="relative">
+                    <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
+                      📅 {formatDisplayDate(fechaRegistro)}
                     </div>
+                    <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   </div>
                 </div>
 
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                   
-                  <div className="flex justify-between items-center mb-3 md:mb-4">
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">Arsenal del Día</label>
-                    <div className="flex gap-1 bg-black/40 p-1 rounded-xl md:rounded-2xl border border-white/5">
+                  {/* BOTONERA TÁCTICA MEJORADA: Selección de Días */}
+                  <div>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Seleccionar Rutina</label>
+                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
                       {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                        <button key={i} onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} className={`w-7 h-7 md:w-8 md:h-8 rounded-lg md:rounded-xl font-black text-[9px] md:text-[10px] transition-all ${diaToca === i + 1 ? 'bg-cyan-500 text-black shadow-[0_0_10px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>{i + 1}</button>
+                        <button key={i} onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 ${diaToca === i + 1 ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                          Día {i + 1}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -939,7 +937,6 @@ export default function App() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 flex-1">
             
-            {/* CRONÓMETRO: Delgado y pegajoso en móvil, grande en PC */}
             <div className="lg:col-span-4 animate-fade-in stagger-1">
               <div className={`flex flex-row lg:flex-col items-center justify-between lg:justify-center p-4 lg:p-10 rounded-2xl lg:rounded-[2.5rem] border transition-all duration-500 sticky top-2 lg:top-8 backdrop-blur-2xl z-40 shadow-2xl ${timerDescanso > 0 ? 'bg-cyan-950/90 border-cyan-400/50 text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'bg-slate-900/90 border-white/10 text-slate-400'}`}>
                 <div className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] lg:mb-4 text-left lg:text-center flex items-center gap-2">
@@ -1034,13 +1031,11 @@ export default function App() {
                               return (
                               <div key={i} className={`flex items-center gap-2 p-1.5 md:p-2 rounded-xl md:rounded-2xl border transition-all duration-300 ${set.completado ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}>
                                 
-                                {/* HITBOX SEGURO: Botón Set */}
                                 <button onClick={() => toggleTipoSerie(ej.id, i)} disabled={set.completado || esCardio} className={`w-12 md:w-16 h-12 md:h-12 rounded-lg md:rounded-xl font-black text-xs md:text-sm flex flex-col items-center justify-center transition-all border ${badgeColor} disabled:opacity-50`}>
                                   {i + 1} <span className="text-[7px] md:text-[9px] mt-0.5">{set.tipoSerie}</span>
                                 </button>
 
                                 <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
-                                  {/* ANTI-ZOOM: text-base en móvil */}
                                   <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
                                   {mostrarConversion && set.peso && !esCardio && !set.completado && (<span className="text-[8px] text-cyan-500/50 absolute bottom-1 font-bold tracking-widest pointer-events-none">{getValorConvertido(set.peso, unidad)}</span>)}
                                 </div>
@@ -1048,7 +1043,6 @@ export default function App() {
                                   <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
                                 </div>
                                 
-                                {/* HITBOX SEGURO: Botón Check */}
                                 <button onClick={() => toggleSet(ej.id, i, ej.descanso_segundos)} className={`w-12 md:w-14 h-12 rounded-lg md:rounded-xl font-black text-base flex items-center justify-center transition-all duration-300 active:scale-90 ${set.completado ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}>✓</button>
                               </div>
                             )})}
@@ -1071,7 +1065,6 @@ export default function App() {
             </div>
           </div>
           
-          {/* Botón flotante móvil con safe-area ajustado */}
           {!ejercicioExpandido && (
              <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 md:py-5 rounded-xl md:rounded-2xl mt-8 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)] text-sm">✅ Finalizar Rutina</button>
           )}
