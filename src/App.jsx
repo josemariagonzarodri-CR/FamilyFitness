@@ -305,9 +305,7 @@ export default function App() {
       if(cat) setCatalogo(cat);
       setHistorialActivo(historialDelPrograma);
 
-      // FIX UX: Auto-expandir la semana más reciente que SÍ tenga datos
       if (historialDelPrograma.length > 0) {
-        // Como vienen ordenados descendente, el índice 0 es la sesión más reciente
         const mostRecentSessionWeek = getWeekNumber(historialDelPrograma[0].fecha_registro, prog.fecha_inicio);
         setSemanaExpandida(mostRecentSessionWeek);
       }
@@ -869,7 +867,6 @@ export default function App() {
             volumen: unidad === 'lbs' ? Math.round(d.tonelaje * 2.20462) : Math.round(d.tonelaje)
         }));
 
-        // FIX: Filtrar solo semanas que tengan sesiones grabadas para no mostrar acordeones vacíos.
         const semanasConData = cohortesSemanales.filter(c => c.semana <= semanaActualNum && c.sesiones.length > 0).slice().reverse();
 
         return (
@@ -922,6 +919,18 @@ export default function App() {
                 </div>
 
                 <div className="md:col-span-6 flex flex-col gap-4 md:gap-5">
+                  
+                  {/* UX FIX: Máquina del Tiempo Restaurada en Pestaña Entrenamiento */}
+                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento antes de iniciarlo."/></label>
+                    <div className="relative">
+                      <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
+                        📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
+                      </div>
+                      <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+
                   <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
@@ -1045,7 +1054,6 @@ export default function App() {
                      </div>
                   </div>
 
-                  {/* FIX LOG DE TRANSACCIONES: Altura fija segura (h-[500px]) para que no colapse */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col h-[500px] md:h-[650px] overflow-hidden">
                     
                     <div className="flex justify-between items-center mb-4 md:mb-5 shrink-0">
