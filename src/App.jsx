@@ -429,7 +429,7 @@ export default function App() {
             ) : (
               <div className="animate-fade-in">
                 <p className="text-xs text-slate-400 text-center mb-6 font-bold uppercase tracking-widest">Ingresa el código que enviamos a<br/><span className="text-cyan-400 block mt-2">{email}</span></p>
-                <input type="text" placeholder="------" value={token} onChange={(e) => setToken(e.target.value)} maxLength={6} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-center text-3xl tracking-[0.5em] font-black" required />
+                <input type="text" placeholder="--------" value={token} onChange={(e) => setToken(e.target.value)} maxLength={8} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-center text-3xl tracking-[0.5em] font-black" required />
                 <button type="submit" className="w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:scale-95 transition-all mb-6">{loading ? 'Verificando...' : 'Verificar y Entrar'}</button>
                 <button type="button" onClick={() => setStep('email')} className="w-full text-[10px] text-slate-500 font-black uppercase tracking-widest hover:text-white transition-colors">← Usar otro correo</button>
               </div>
