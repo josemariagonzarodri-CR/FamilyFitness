@@ -49,7 +49,6 @@ const calcular1RM = (peso, reps) => {
   return p * (1 + (r / 30));
 }
 
-// Lógica de Cohortes (Semanas)
 const getWeekNumber = (dateStr, startDateStr) => {
   if(!dateStr || !startDateStr) return 1;
   const d = new Date(dateStr.split('T')[0] + 'T12:00:00');
@@ -115,7 +114,8 @@ export default function App() {
   const [catalogo, setCatalogo] = useState([])
   const [historialGlobal, setHistorialGlobal] = useState([]) 
   const [historialActivo, setHistorialActivo] = useState([]) 
-  const [semanaExpandida, setSemanaExpandida] = useState(null) // NUEVO: Acordeon por semana
+  const [semanaExpandida, setSemanaExpandida] = useState(null) 
+  const [logExpandido, setLogExpandido] = useState(null) 
   const [fatiga, setFatiga] = useState({ Pecho: 100, Espalda: 100, Piernas: 100, Hombros: 100, Brazos: 100, Core: 100 })
   const [metricas, setMetricas] = useState({})
   const [rendimientoPrevio, setRendimientoPrevio] = useState({}) 
@@ -305,7 +305,6 @@ export default function App() {
       if(cat) setCatalogo(cat);
       setHistorialActivo(historialDelPrograma);
       
-      // Auto-expande la semana actual en el log
       const currentW = getWeekNumber(fDate(hoy), prog.fecha_inicio);
       setSemanaExpandida(currentW);
 
@@ -377,6 +376,7 @@ export default function App() {
   }
 
   const toggleSemanaLog = (semana) => { triggerHaptic(); setSemanaExpandida(prev => prev === semana ? null : semana); }
+  const toggleLog = (idSesion) => { triggerHaptic(); setLogExpandido(prev => prev === idSesion ? null : idSesion); }
 
   const exportarDatosCSV = () => {
     triggerHaptic(); if (!historialGlobal || historialGlobal.length === 0) return alert("No hay datos históricos para exportar.");
@@ -553,7 +553,8 @@ export default function App() {
     </div>
   )
 
-  const CustomTooltipArea = ({ active, payload, label }) => {
+  // FIX CRÍTICO: Tooltips renderizados como funciones puras
+  const renderTooltipArea = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
@@ -565,7 +566,7 @@ export default function App() {
     return null;
   };
 
-  const CustomTooltipBar = ({ active, payload, label }) => {
+  const renderTooltipBar = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
@@ -957,7 +958,7 @@ export default function App() {
                 {/* Columna Analíticas Izquierda */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* ESTADO DE LA SEMANA ACTUAL (Reemplaza a los "Últimos 7 días") */}
+                  {/* ESTADO DE LA SEMANA ACTUAL */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-4 items-center">
                         <span className="text-slate-500 flex items-center">Progreso de la Semana {semanaActualNum} <InfoIcon title="Cumplimiento" content="Basado en tu fecha de inicio."/></span>
@@ -968,7 +969,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* NUEVO: GRÁFICO BARCHART DE CUMPLIMIENTO SEMANAL */}
+                  {/* GRÁFICO BARCHART DE CUMPLIMIENTO SEMANAL */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                       Disciplina Semanal Histórica <InfoIcon title="Disciplina" content="Verde: Completaste la meta. Naranja: A medias. Gris: Faltaste."/>
@@ -979,7 +980,7 @@ export default function App() {
                           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                           <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
                           <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                          <Tooltip content={<CustomTooltipBar />} cursor={{ fill: '#ffffff05' }} />
+                          <Tooltip content={renderTooltipBar} cursor={{ fill: '#ffffff05' }} />
                           <Bar dataKey="cumplimiento" radius={[4, 4, 0, 0]} maxBarSize={40}>
                             {datosGraficoCumplimiento.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.cumplimiento >= 100 ? '#34d399' : (entry.cumplimiento > 0 ? '#fbbf24' : '#334155')} />
@@ -1007,7 +1008,7 @@ export default function App() {
                               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                               <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
                               <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => val} />
-                              <Tooltip content={<CustomTooltipArea />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
+                              <Tooltip content={renderTooltipArea} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
                               <Area type="monotone" dataKey="volumen" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorVol)" activeDot={{ r: 6, fill: "#06b6d4", stroke: "#020617", strokeWidth: 3 }}>
                                  <LabelList dataKey="volumen" position="top" fill="#22d3ee" fontSize={9} fontWeight="bold" offset={10} />
                               </Area>
@@ -1061,7 +1062,6 @@ export default function App() {
                       {cohortesSemanales.length === 0 ? (
                         <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
                       ) : (
-                        // Solo mostramos semanas hasta la actual, e invertimos el array para ver la más reciente arriba
                         cohortesSemanales.filter(c => c.semana <= semanaActualNum).slice().reverse().map(cohorte => {
                           const isExpanded = semanaExpandida === cohorte.semana;
                           const volTotalDisplay = unidad === 'lbs' ? (cohorte.volumenTotal * 2.20462).toFixed(0) : Math.round(cohorte.volumenTotal);
@@ -1073,7 +1073,6 @@ export default function App() {
                           return (
                             <div key={`sem-${cohorte.semana}`} className="bg-black/30 border border-white/5 rounded-2xl flex flex-col transition-colors group">
                                
-                               {/* Cabecera del Acordeón (La Semana) */}
                                <div className={`flex justify-between items-center cursor-pointer p-4 rounded-2xl transition-all border ${headerColor}`} onClick={() => toggleSemanaLog(cohorte.semana)}>
                                   <div>
                                      <div className="font-black text-xs md:text-sm uppercase tracking-widest mb-1">
@@ -1087,7 +1086,6 @@ export default function App() {
                                   <div className="font-black text-[10px]">{isExpanded ? '▲' : '▼'}</div>
                                </div>
 
-                               {/* Contenido del Acordeón (Los Días) */}
                                {isExpanded && (
                                   <div className="p-3 space-y-2 animate-fade-in-fast">
                                      {cohorte.sesiones.length === 0 ? (
@@ -1114,7 +1112,6 @@ export default function App() {
                                                  </div>
                                                </div>
 
-                                               {/* Desglose de ejercicios por día */}
                                                {isDayExpanded && sesion.es_asistencia && (
                                                  <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
                                                    {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
