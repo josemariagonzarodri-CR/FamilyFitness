@@ -59,19 +59,22 @@ const getWeekNumber = (dateStr, startDateStr) => {
   return Math.floor(diffDays / 7) + 1;
 };
 
+// NUEVO: Array extendido con GIFs vinculados
 const baseBiomecanica = [
-  { keywords: ['press', 'banca', 'pecho', 'chest'], target: 'Pectoral Mayor, Deltoides Frontal, Tríceps', setup: 'Acuéstate con los ojos bajo la barra. Retrae escápulas.', ejecucion: 'Baja controlado. Empuja explosivamente.', respiracion: 'Inhala al bajar. Exhala al empujar.' },
-  { keywords: ['sentadilla', 'squat', 'pierna'], target: 'Cuádriceps, Glúteos, Core', setup: 'Pies al ancho de hombros. Pecho arriba.', ejecucion: 'Rompe el paralelo y sube empujando el suelo.', respiracion: 'Inhala antes de bajar. Exhala al subir.' },
-  { keywords: ['muerto', 'deadlift', 'dl'], target: 'Isquiosurales, Glúteos, Espalda Baja', setup: 'Barra sobre medio del pie. Espalda recta.', ejecucion: 'Empuja el suelo llevando cadera adelante.', respiracion: 'Inhala abajo. Sube aguantando y exhala al final.' },
-  { keywords: ['remo', 'row', 'espalda'], target: 'Dorsal Ancho, Romboides, Bíceps', setup: 'Torso inclinado. Espalda neutra.', ejecucion: 'Jala codos hacia cadera. Aprieta arriba.', respiracion: 'Inhala al bajar. Exhala al jalar.' },
-  { keywords: ['militar', 'hombro', 'shoulder'], target: 'Deltoides Anterior y Medio, Tríceps', setup: 'Barra a clavículas. Codos ligeramente adelante.', ejecucion: 'Empuja peso hacia arriba. Controla bajada.', respiracion: 'Inhala abajo. Exhala al empujar.' },
-  { keywords: ['dominada', 'pull', 'jalon', 'lats'], target: 'Dorsal Ancho, Bíceps', setup: 'Agarre prono. Retrae escápulas.', ejecucion: 'Lleva codos hacia costillas. Baja lento.', respiracion: 'Inhala colgado. Exhala al subir.' },
-  { keywords: ['bicep', 'curl', 'brazo'], target: 'Bíceps Braquial', setup: 'Codos pegados a costillas. Sin impulso.', ejecucion: 'Sube apretando y baja en 3 segundos.', respiracion: 'Inhala al bajar. Exhala al subir.' },
-  { keywords: ['tricep', 'extension', 'copa', 'frances'], target: 'Tríceps', setup: 'Codos fijos. Solo se mueve el antebrazo.', ejecucion: 'Extiende el codo por completo. Controla la bajada.', respiracion: 'Inhala al flexionar. Exhala al extender.' },
-  { keywords: ['eliptica', 'caminar', 'correr', 'bici', 'cardio'], target: 'Sistema Cardiovascular', setup: 'Ajusta la máquina a tus proporciones.', ejecucion: 'Mantén un ritmo constante (Z2) o haz intervalos (HIIT).', respiracion: 'Respiración fluida. Si no puedes hablar, vas muy rápido (Z3+).' }
+  { keywords: ['press', 'banca', 'pecho', 'chest'], target: 'Pectoral Mayor, Deltoides Frontal, Tríceps', setup: 'Acuéstate con los ojos bajo la barra. Retrae escápulas.', ejecucion: 'Baja controlado. Empuja explosivamente.', respiracion: 'Inhala al bajar. Exhala al empujar.', gif: 'https://i.pinimg.com/originals/f3/cb/9d/f3cb9d06b3cc76735ff8832a846c4f34.gif' },
+  { keywords: ['sentadilla', 'squat', 'pierna'], target: 'Cuádriceps, Glúteos, Core', setup: 'Pies al ancho de hombros. Pecho arriba.', ejecucion: 'Rompe el paralelo y sube empujando el suelo.', respiracion: 'Inhala antes de bajar. Exhala al subir.', gif: 'https://i.pinimg.com/originals/60/d4/0b/60d40b70d5a3eb7ea122e2bba20b8c8d.gif' },
+  { keywords: ['muerto', 'deadlift', 'dl'], target: 'Isquiosurales, Glúteos, Espalda Baja', setup: 'Barra sobre medio del pie. Espalda recta.', ejecucion: 'Empuja el suelo llevando cadera adelante.', respiracion: 'Inhala abajo. Sube aguantando y exhala al final.', gif: 'https://i.pinimg.com/originals/4b/39/fa/4b39fae6118b6f3c559814bcad6e9ba9.gif' },
+  { keywords: ['remo', 'row', 'espalda'], target: 'Dorsal Ancho, Romboides, Bíceps', setup: 'Torso inclinado. Espalda neutra.', ejecucion: 'Jala codos hacia cadera. Aprieta arriba.', respiracion: 'Inhala al bajar. Exhala al jalar.', gif: 'https://i.pinimg.com/originals/4a/1c/b4/4a1cb46df1a07010e2fb7eb85489aa36.gif' },
+  { keywords: ['militar', 'hombro', 'shoulder'], target: 'Deltoides Anterior y Medio, Tríceps', setup: 'Barra a clavículas. Codos ligeramente adelante.', ejecucion: 'Empuja peso hacia arriba. Controla bajada.', respiracion: 'Inhala abajo. Exhala al empujar.', gif: 'https://i.pinimg.com/originals/68/cb/54/68cb54bc240aab1b66df88b0a996d925.gif' },
+  { keywords: ['dominada', 'pull', 'jalon', 'lats'], target: 'Dorsal Ancho, Bíceps', setup: 'Agarre prono. Retrae escápulas.', ejecucion: 'Lleva codos hacia costillas. Baja lento.', respiracion: 'Inhala colgado. Exhala al subir.', gif: 'https://i.pinimg.com/originals/d9/38/c3/d938c3de7c5417cd54cc450e181d5895.gif' },
+  { keywords: ['bicep', 'curl', 'brazo'], target: 'Bíceps Braquial', setup: 'Codos pegados a costillas. Sin impulso.', ejecucion: 'Sube apretando y baja en 3 segundos.', respiracion: 'Inhala al bajar. Exhala al subir.', gif: 'https://i.pinimg.com/originals/c7/2f/7c/c72f7c00e620d44081c750eaf2268cd0.gif' },
+  { keywords: ['tricep', 'extension', 'copa', 'frances'], target: 'Tríceps', setup: 'Codos fijos. Solo se mueve el antebrazo.', ejecucion: 'Extiende el codo por completo. Controla la bajada.', respiracion: 'Inhala al flexionar. Exhala al extender.', gif: 'https://i.pinimg.com/originals/7e/81/ab/7e81ab352de22c4a9657a8a61c37b75f.gif' },
+  { keywords: ['eliptica', 'caminar', 'correr', 'bici', 'cardio'], target: 'Sistema Cardiovascular', setup: 'Ajusta la máquina a tus proporciones.', ejecucion: 'Mantén un ritmo constante (Z2) o haz intervalos (HIIT).', respiracion: 'Respiración fluida. Si no puedes hablar, vas muy rápido (Z3+).', gif: 'https://i.pinimg.com/originals/5c/41/44/5c4144367098e4f164b3ce3c85bb1205.gif' },
+  { keywords: ['abdominales', 'crunch', 'core', 'plancha'], target: 'Recto Abdominal, Transverso', setup: 'Superficie estable.', ejecucion: 'Contrae el abdomen acercando el esternón a la pelvis.', respiracion: 'Inhala al extender. Exhala fuerte al contraer.', gif: 'https://i.pinimg.com/originals/c0/83/6a/c0836a0c0a969c3a373b9f3900be4661.gif' },
+  { keywords: ['flexiones', 'push up', 'lagartijas'], target: 'Pectoral, Tríceps, Deltoides', setup: 'Manos ancho de hombros, cuerpo recto.', ejecucion: 'Baja hasta rozar el suelo. Empuja explosivo.', respiracion: 'Inhala al bajar. Exhala al subir.', gif: 'https://i.pinimg.com/originals/a3/b9/7a/a3b97a2cb5f6064f9f69b1b70debfd11.gif' }
 ];
 
-const guiaUniversal = { target: 'Músculo Objetivo', setup: 'Asegura base estable. Espalda neutra.', ejecucion: 'Movimiento controlado. 1s concéntrica, 3s excéntrica.', respiracion: 'Inhala al estirar. Exhala al esfuerzo.' };
+const guiaUniversal = { target: 'Músculo Objetivo', setup: 'Asegura base estable. Espalda neutra.', ejecucion: 'Movimiento controlado. 1s concéntrica, 3s excéntrica.', respiracion: 'Inhala al estirar. Exhala al esfuerzo.', gif: null };
 
 const buscarGuia = (nombreEjercicio) => {
   const nl = nombreEjercicio.toLowerCase();
@@ -156,8 +159,6 @@ export default function App() {
   const [catSeries, setCatSeries] = useState(3)
   const [catReps, setCatReps] = useState(10)
   const [catDescanso, setCatDescanso] = useState(60)
-  
-  // TERCERA MODALIDAD HABILITADA ('solo_reps')
   const [catTipo, setCatTipo] = useState('fuerza') 
   const [catPeso, setCatPeso] = useState('') 
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
@@ -260,16 +261,12 @@ export default function App() {
             
             if (ej.series_ejercicio && ej.series_ejercicio.length > 0) {
               const seriesValidas = ej.series_ejercicio.filter(s => s.tipo_serie === 'N' || !s.tipo_serie);
-              
-              // Solo la fuerza suma al volumen total
               if (tipoEj === 'fuerza') {
                 seriesValidas.forEach(serie => {
                   tonelaje_kg += (serie.peso_kg * serie.repeticiones);
                   if (serie.peso_kg > statsEjGlobal[nameKey].maxPeso) statsEjGlobal[nameKey].maxPeso = serie.peso_kg; 
                 });
               }
-              
-              // Textos fantasmas adaptados a las 3 modalidades
               if (sesion.es_asistencia && !fantasmasPrevios[nameKey] && seriesValidas.length > 0) {
                 if (tipoEj === 'cardio_tiempo') {
                   fantasmasPrevios[nameKey] = `${seriesValidas[0].repeticiones} min @ Nivel ${seriesValidas[0].peso_kg}`;
@@ -366,7 +363,6 @@ export default function App() {
        const val = parseFloat(catPeso) || 0;
        pesoSQL = unidad === 'lbs' ? (val / 2.20462) : val;
     }
-    // Si es solo reps o cardio, forzamos el peso objetivo a 0 para limpieza de base de datos
     if (catTipo === 'solo_reps' || catTipo === 'cardio_tiempo') {
        pesoSQL = 0;
     }
@@ -502,7 +498,6 @@ export default function App() {
               if (newEj) {
                   const seriesToInsert = item.completedSets.map((s, index) => {
                       const valorDigitado = parseFloat(s.peso) || 0;
-                      // Si es solo reps, aseguramos que el peso guardado sea 0
                       const pesoParaSQL = (item.ej.tipo_ejercicio === 'cardio_tiempo' || item.ej.tipo_ejercicio === 'solo_reps') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
                       return { ejercicio_id: newEj.id, numero_serie: index + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N' };
                   });
@@ -641,6 +636,16 @@ export default function App() {
               </div>
               <button onClick={() => { triggerHaptic(); setBioModal({ isOpen: false, nombre: '', guia: null }); }} className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-slate-400 transition-colors">✕</button>
             </div>
+            
+            {/* NUEVO: Contenedor del GIF Animado */}
+            {bioModal.guia.gif && (
+               <div className="w-full h-40 md:h-56 bg-black/50 rounded-xl md:rounded-2xl border border-white/5 mb-6 overflow-hidden flex items-center justify-center relative">
+                 {/* mix-blend-screen y opacity para un look moderno tipo holograma */}
+                 <img src={bioModal.guia.gif} alt={`Animación de ${bioModal.nombre}`} className="w-full h-full object-cover mix-blend-screen opacity-90" />
+                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent pointer-events-none"></div>
+               </div>
+            )}
+
             <div className="space-y-4 md:space-y-6">
               <div className="bg-black/30 p-4 rounded-xl md:rounded-2xl border border-white/5">
                 <div className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">🎯 Músculo Objetivo</div>
@@ -749,13 +754,12 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* BOTONERA DE 3 MODALIDADES (Fuerza, Corporal, Cardio) */}
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 block">Modalidad de Ejercicio</label>
                       <div className="flex gap-2 mb-3 md:mb-4">
-                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
-                        <button type="button" onClick={() => setCatTipo('solo_reps')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'solo_reps' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Solo Reps</button>
-                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[8px] md:text-[10px] font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio</button>
+                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
+                        <button type="button" onClick={() => setCatTipo('solo_reps')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'solo_reps' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Solo Reps</button>
+                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio/Tiempo</button>
                       </div>
                       <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : (catTipo === 'solo_reps' ? "Ej. Abdominales, Flexiones..." : "Ej. Elíptica...")} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600 text-sm md:text-base" />
                     </div>
@@ -832,7 +836,6 @@ export default function App() {
       {view === 'dashboard' && (() => {
         
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
-        const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
         
         let cohortesSemanales = [];
         let semanaActualNum = 1;
@@ -906,7 +909,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* ========================================================= */}
+            {/* PESTAÑA 1: ENTRENAMIENTO */}
             {dashTab === 'resumen' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
@@ -934,7 +937,6 @@ export default function App() {
                 </div>
 
                 <div className="md:col-span-6 flex flex-col gap-4 md:gap-5">
-                  
                   <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Entrenamiento <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu sesión."/></label>
                     <div className="relative">
@@ -957,21 +959,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {resumenEjerciciosHoy.length > 0 ? (
-                      <ul className="space-y-2 md:space-y-3 mb-4 md:mb-6">
-                        {resumenEjerciciosHoy.map(ej => {
-                          const isC = ej.tipo_ejercicio === 'cardio_tiempo';
-                          const isR = ej.tipo_ejercicio === 'solo_reps';
-                          return (
-                          <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl md:rounded-2xl border border-white/5">
-                            <span className="font-bold text-xs md:text-sm text-white">{ej.nombre_ejercicio}</span>
-                            <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400' : (isR ? 'text-emerald-400' : 'text-cyan-400')}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':'reps'}</span>
-                          </li>
-                        )})}
-                      </ul>
-                    ) : (
-                      <div className="text-slate-500 text-xs italic text-center py-8 flex-1 flex items-center justify-center">Sin catálogo asignado para el Día {diaToca}.</div>
-                    )}
                     <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
                   </div>
 
@@ -980,16 +967,13 @@ export default function App() {
                     <button onClick={exportarDatosCSV} className="py-3.5 md:py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 Exportar CSV</button>
                     <button onClick={registrarAusencia} className="py-3.5 md:py-4 bg-red-500/10 border border-red-500/20 text-red-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-red-500/20 text-[9px] md:text-[10px]">⏸️ Registrar Ausencia </button>
                   </div>
-
                 </div>
               </div>
             )}
 
-
-            {/* ========================================================= */}
+            {/* PESTAÑA 2: ANALÍTICAS */}
             {dashTab === 'analiticas' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
-                
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
@@ -1138,7 +1122,6 @@ export default function App() {
                                                 {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
                                                   const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
                                                   const isRepsOnly = ej.tipo_ejercicio === 'solo_reps';
-                                                  
                                                   return (
                                                     <div key={ejIdx} className="bg-black/40 rounded-lg p-2 border border-white/5">
                                                       <div className="flex justify-between items-center mb-2">
@@ -1298,7 +1281,6 @@ export default function App() {
                                   {i + 1} <span className="text-[7px] md:text-[9px] mt-0.5">{set.tipoSerie}</span>
                                 </button>
 
-                                {/* UX UPDATE: Ocultar input de peso si es "Solo Reps" */}
                                 {esRepsOnly ? (
                                    <div className="flex-1 flex flex-col items-center justify-center bg-black/10 rounded-lg h-12 overflow-hidden border border-white/5">
                                       <span className="text-[10px] md:text-xs font-bold text-emerald-500/80 uppercase tracking-widest">Corporal</span>
