@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { db } from './db' 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, BarChart, Bar, Cell } from 'recharts';
 
 const PremiumStyles = () => (
   <style>{`
@@ -20,7 +20,6 @@ const PremiumStyles = () => (
   `}</style>
 )
 
-// ICONOS MODERNOS SVG
 const ActivityIcon = () => <svg className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
 const ChartIcon = () => <svg className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
 
@@ -49,6 +48,17 @@ const calcular1RM = (peso, reps) => {
   if (r === 1) return p;
   return p * (1 + (r / 30));
 }
+
+// Lógica de Cohortes (Semanas)
+const getWeekNumber = (dateStr, startDateStr) => {
+  if(!dateStr || !startDateStr) return 1;
+  const d = new Date(dateStr.split('T')[0] + 'T12:00:00');
+  const s = new Date(startDateStr.split('T')[0] + 'T12:00:00');
+  const diffTime = d - s;
+  if (diffTime < 0) return 1; 
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.floor(diffDays / 7) + 1;
+};
 
 const baseBiomecanica = [
   { keywords: ['press', 'banca', 'pecho', 'chest'], target: 'Pectoral Mayor, Deltoides Frontal, Tríceps', setup: 'Acuéstate con los ojos bajo la barra. Retrae escápulas.', ejecucion: 'Baja controlado. Empuja explosivamente.', respiracion: 'Inhala al bajar. Exhala al empujar.' },
@@ -105,7 +115,7 @@ export default function App() {
   const [catalogo, setCatalogo] = useState([])
   const [historialGlobal, setHistorialGlobal] = useState([]) 
   const [historialActivo, setHistorialActivo] = useState([]) 
-  const [logExpandido, setLogExpandido] = useState(null) 
+  const [semanaExpandida, setSemanaExpandida] = useState(null) // NUEVO: Acordeon por semana
   const [fatiga, setFatiga] = useState({ Pecho: 100, Espalda: 100, Piernas: 100, Hombros: 100, Brazos: 100, Core: 100 })
   const [metricas, setMetricas] = useState({})
   const [rendimientoPrevio, setRendimientoPrevio] = useState({}) 
@@ -294,6 +304,11 @@ export default function App() {
       const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', prog.id).order('dia_asignado', { ascending: true });
       if(cat) setCatalogo(cat);
       setHistorialActivo(historialDelPrograma);
+      
+      // Auto-expande la semana actual en el log
+      const currentW = getWeekNumber(fDate(hoy), prog.fecha_inicio);
+      setSemanaExpandida(currentW);
+
       if (!cat || cat.length === 0) setView('create_program'); else setView('dashboard');
     } else {
       setProgramaActivo(null); setCatalogo([]); setHistorialActivo([]); setView('create_program');
@@ -361,7 +376,7 @@ export default function App() {
     await supabase.from('sesiones_familiares').delete().eq('id', idSesion); cargarPrograma(session.user.email);
   }
 
-  const toggleLog = (idSesion) => { triggerHaptic(); setLogExpandido(prev => prev === idSesion ? null : idSesion); }
+  const toggleSemanaLog = (semana) => { triggerHaptic(); setSemanaExpandida(prev => prev === semana ? null : semana); }
 
   const exportarDatosCSV = () => {
     triggerHaptic(); if (!historialGlobal || historialGlobal.length === 0) return alert("No hay datos históricos para exportar.");
@@ -538,12 +553,24 @@ export default function App() {
     </div>
   )
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltipArea = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
           <p className="text-white font-bold text-xs uppercase tracking-widest mb-1">{label}</p>
           <p className="text-cyan-400 font-black">{`${payload[0].value} ${unidad}`}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomTooltipBar = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
+          <p className="text-white font-bold text-xs uppercase tracking-widest mb-1">{label}</p>
+          <p className="text-cyan-400 font-black">{`${payload[0].value}% Cumplimiento`}</p>
         </div>
       );
     }
@@ -784,16 +811,54 @@ export default function App() {
 
       {view === 'dashboard' && (() => {
         
-        // --- CALCULOS DE CUMPLIMIENTO SEMANAL ---
-        const date7DaysAgo = new Date();
-        date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
-        const asistenciasUltimos7Dias = historialActivo.filter(h => h.es_asistencia && new Date(h.fecha_registro) >= date7DaysAgo).length;
-        const metaSemanal = programaActivo?.dias_por_semana || 1;
-        const cumplimientoPct = Math.min((asistenciasUltimos7Dias / metaSemanal) * 100, 100);
-
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
         
+        // --- COHORTES SEMANALES (ENGINE DE BI) ---
+        let cohortesSemanales = [];
+        let semanaActualNum = 1;
+        let statusSemanaActual = { asistencias: 0, meta: 1, pct: 0 };
+        let datosGraficoCumplimiento = [];
+
+        if (programaActivo) {
+            const metaSemanal = programaActivo.dias_por_semana;
+            semanaActualNum = getWeekNumber(fDate(hoy), programaActivo.fecha_inicio);
+            const maxWeeks = Math.max(programaActivo.semanas_duracion, semanaActualNum);
+            
+            cohortesSemanales = Array.from({ length: maxWeeks }, (_, i) => ({
+                semana: i + 1,
+                sesiones: [],
+                asistencias: 0,
+                volumenTotal: 0,
+                cumplimientoPct: 0
+            }));
+
+            historialActivo.forEach(sesion => {
+                const w = getWeekNumber(sesion.fecha_registro, programaActivo.fecha_inicio);
+                if(w >= 1 && w <= maxWeeks) {
+                    cohortesSemanales[w - 1].sesiones.push(sesion);
+                    if(sesion.es_asistencia) {
+                        cohortesSemanales[w - 1].asistencias += 1;
+                        cohortesSemanales[w - 1].volumenTotal += sesion.tonelaje;
+                    }
+                }
+            });
+
+            cohortesSemanales.forEach(c => {
+                c.cumplimientoPct = Math.min((c.asistencias / metaSemanal) * 100, 100);
+                c.sesiones.sort((a,b) => new Date(b.fecha_registro) - new Date(a.fecha_registro)); 
+            });
+
+            if(semanaActualNum <= maxWeeks) {
+                const currentC = cohortesSemanales[semanaActualNum - 1];
+                statusSemanaActual = { asistencias: currentC.asistencias, meta: metaSemanal, pct: currentC.cumplimientoPct };
+            }
+
+            datosGraficoCumplimiento = cohortesSemanales.filter(c => c.semana <= semanaActualNum).map(c => ({
+                name: `Sem ${c.semana}`, cumplimiento: c.cumplimientoPct
+            }));
+        }
+
         const chartData = historialActivo.filter(h => h.es_asistencia).sort((a,b) => new Date(a.fecha_registro) - new Date(b.fecha_registro)).slice(-10);
         const chartDataFormatted = chartData.map(d => ({
             fecha: formatDisplayDate(d.fecha_registro).substring(0,5),
@@ -811,7 +876,6 @@ export default function App() {
               <TopBarControles />
             </div>
 
-            {/* BARRA DE PESTAÑAS */}
             <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6 md:mb-10 w-full max-w-md mx-auto md:mx-0 animate-fade-in">
               <button onClick={() => {setDashTab('resumen'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center ${dashTab === 'resumen' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
                 <ActivityIcon /> Entrenar
@@ -885,22 +949,44 @@ export default function App() {
 
 
             {/* ========================================================= */}
-            {/* PESTAÑA 2: ANALÍTICAS */}
+            {/* PESTAÑA 2: ANALÍTICAS (Centro de Comando BI) */}
             {/* ========================================================= */}
             {dashTab === 'analiticas' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
                 
-                {/* Analiticas Izquierda */}
+                {/* Columna Analíticas Izquierda */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* CUMPLIMIENTO SEMANAL MIGRADO */}
+                  {/* ESTADO DE LA SEMANA ACTUAL (Reemplaza a los "Últimos 7 días") */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                     <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-4 items-center">
-                        <span className="text-slate-500 flex items-center">Cumplimiento (Últimos 7 Días) <InfoIcon title="Cumplimiento" content="Cuantas sesiones has hecho en los últimos 7 días vs tu meta semanal."/></span>
-                        <span className={`${cumplimientoPct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{asistenciasUltimos7Dias} / {metaSemanal} Días</span>
+                        <span className="text-slate-500 flex items-center">Progreso de la Semana {semanaActualNum} <InfoIcon title="Cumplimiento" content="Basado en tu fecha de inicio."/></span>
+                        <span className={`${statusSemanaActual.pct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{statusSemanaActual.asistencias} / {statusSemanaActual.meta} Días</span>
                     </div>
                     <div className="w-full bg-black/50 rounded-full h-2 md:h-3 border border-white/5 p-0.5">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${cumplimientoPct >= 100 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'}`} style={{ width: `${cumplimientoPct}%` }}></div>
+                        <div className={`h-full rounded-full transition-all duration-1000 ${statusSemanaActual.pct >= 100 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'}`} style={{ width: `${statusSemanaActual.pct}%` }}></div>
+                    </div>
+                  </div>
+
+                  {/* NUEVO: GRÁFICO BARCHART DE CUMPLIMIENTO SEMANAL */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
+                      Disciplina Semanal Histórica <InfoIcon title="Disciplina" content="Verde: Completaste la meta. Naranja: A medias. Gris: Faltaste."/>
+                    </label>
+                    <div className="h-40 md:h-48 w-full mt-4 md:mt-6 -ml-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={datosGraficoCumplimiento} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                          <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
+                          <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                          <Tooltip content={<CustomTooltipBar />} cursor={{ fill: '#ffffff05' }} />
+                          <Bar dataKey="cumplimiento" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                            {datosGraficoCumplimiento.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.cumplimiento >= 100 ? '#34d399' : (entry.cumplimiento > 0 ? '#fbbf24' : '#334155')} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
 
@@ -908,9 +994,8 @@ export default function App() {
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                       Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
                     </label>
-                    
                     {chartDataFormatted.length > 0 ? (
-                      <div className="h-56 md:h-72 w-full mt-4 md:mt-6 -ml-4">
+                      <div className="h-48 md:h-56 w-full mt-4 md:mt-6 -ml-4">
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={chartDataFormatted} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                               <defs>
@@ -922,7 +1007,7 @@ export default function App() {
                               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                               <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
                               <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => val} />
-                              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
+                              <Tooltip content={<CustomTooltipArea />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
                               <Area type="monotone" dataKey="volumen" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorVol)" activeDot={{ r: 6, fill: "#06b6d4", stroke: "#020617", strokeWidth: 3 }}>
                                  <LabelList dataKey="volumen" position="top" fill="#22d3ee" fontSize={9} fontWeight="bold" offset={10} />
                               </Area>
@@ -930,15 +1015,15 @@ export default function App() {
                           </ResponsiveContainer>
                       </div>
                     ) : (
-                      <div className="h-48 md:h-64 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
+                      <div className="h-48 md:h-56 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
                     )}
                   </div>
                 </div>
 
-                {/* Analiticas Derecha */}
+                {/* Columna Analíticas Derecha */}
                 <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* NUEVA MÉTRICA: Mapa de Recuperación Muscular */}
+                  {/* MAPA DE RECUPERACIÓN MUSCULAR */}
                   <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">
                         Estado de Recuperación Muscular <InfoIcon title="Fatiga Neural" content="100% = Descansado. Basado en tus sesiones de las últimas 48 horas."/>
@@ -958,11 +1043,11 @@ export default function App() {
                      </div>
                   </div>
 
-                  {/* FIX LOG DE TRANSACCIONES: Altura Máxima Flexible */}
-                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col max-h-[500px]">
+                  {/* EL NUEVO LOG DE TRANSACCIONES POR COHORTES (ACORDEONES) */}
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex flex-col flex-1 h-[500px]">
                     <div className="flex justify-between items-center mb-4 md:mb-5">
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">
-                        Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
+                        Log de Transacciones <InfoIcon title="Cohortes Semanales" content="Tus sesiones agrupadas por semana desde el inicio del programa."/>
                       </label>
                       <div className="relative">
                         <div className="text-cyan-400 text-[9px] font-black tracking-widest hover:text-cyan-300 transition-colors cursor-pointer bg-cyan-500/10 px-3 py-1.5 rounded-lg border border-cyan-500/20">
@@ -972,74 +1057,105 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="overflow-y-auto pr-2 space-y-2 md:space-y-3 no-scrollbar flex-1">
-                      {historialActivo.length === 0 ? (
+                    <div className="overflow-y-auto pr-2 space-y-3 no-scrollbar flex-1 pb-4">
+                      {cohortesSemanales.length === 0 ? (
                         <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
                       ) : (
-                        historialActivo.map(sesion => {
-                          const isExpanded = logExpandido === sesion.id;
-                          const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
+                        // Solo mostramos semanas hasta la actual, e invertimos el array para ver la más reciente arriba
+                        cohortesSemanales.filter(c => c.semana <= semanaActualNum).slice().reverse().map(cohorte => {
+                          const isExpanded = semanaExpandida === cohorte.semana;
+                          const volTotalDisplay = unidad === 'lbs' ? (cohorte.volumenTotal * 2.20462).toFixed(0) : Math.round(cohorte.volumenTotal);
+                          
+                          let headerColor = "text-slate-400 bg-white/5 border-white/5";
+                          if (cohorte.cumplimientoPct >= 100) headerColor = "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+                          else if (cohorte.cumplimientoPct > 0) headerColor = "text-amber-400 bg-amber-500/10 border-amber-500/20";
+
                           return (
-                            <div key={sesion.id} className="bg-black/30 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex flex-col hover:border-white/10 transition-colors group">
-                              <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
-                                    <span className="font-bold text-white text-xs md:text-sm">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
+                            <div key={`sem-${cohorte.semana}`} className="bg-black/30 border border-white/5 rounded-2xl flex flex-col transition-colors group">
+                               
+                               {/* Cabecera del Acordeón (La Semana) */}
+                               <div className={`flex justify-between items-center cursor-pointer p-4 rounded-2xl transition-all border ${headerColor}`} onClick={() => toggleSemanaLog(cohorte.semana)}>
+                                  <div>
+                                     <div className="font-black text-xs md:text-sm uppercase tracking-widest mb-1">
+                                        SEMANA {cohorte.semana}
+                                     </div>
+                                     <div className="text-[9px] md:text-[10px] font-bold opacity-80 uppercase tracking-widest flex gap-3">
+                                        <span>✓ {cohorte.asistencias} Sesiones</span>
+                                        <span>⚡ Vol: {volTotalDisplay} {unidad}</span>
+                                     </div>
                                   </div>
-                                  {sesion.es_asistencia && (
-                                    <div className="text-[10px] md:text-xs text-slate-400 font-bold ml-1 flex items-center">Total Sesión: <span className="text-white ml-1 mr-1">{tonelajeDisplay} {unidad}</span></div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 md:gap-4">
-                                  {sesion.es_asistencia && (<span className="text-[8px] md:text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
-                                  <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 md:w-8 md:h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
-                                </div>
-                              </div>
-                              {isExpanded && sesion.es_asistencia && (
-                                <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 space-y-2 md:space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
-                                  {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
-                                    const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
-                                    const totalEjKg = isCardio ? 0 : (ej.series_ejercicio?.filter(s=> s.tipo_serie==='N' || !s.tipo_serie).reduce((sum, s) => sum + (s.peso_kg * s.repeticiones), 0) || 0);
-                                    const totalEjDisplay = unidad === 'lbs' ? (totalEjKg * 2.20462).toFixed(1).replace(/\.0$/, '') : totalEjKg;
-                                    return (
-                                      <div key={ejIdx} className="bg-white/5 rounded-lg md:rounded-xl p-2 md:p-3 border border-white/5">
-                                        <div className="flex justify-between items-center mb-2 md:mb-3">
-                                          <span className={`text-[10px] md:text-xs font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
-                                          {!isCardio && <span className="text-[8px] md:text-[10px] font-black text-white bg-black/40 px-2 py-0.5 md:py-1 rounded-md border border-white/10">Vol: {totalEjDisplay} {unidad}</span>}
-                                        </div>
-                                        <div className="space-y-1">
-                                          {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
-                                            const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
-                                            const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
-                                            return (
-                                              <div key={sIdx} className="flex justify-between text-[9px] md:text-[10px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
-                                                <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
-                                                {isCardio ? (
-                                                  <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
-                                                ) : (
-                                                  <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
-                                                )}
-                                              </div>
-                                            )
-                                          })}
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
+                                  <div className="font-black text-[10px]">{isExpanded ? '▲' : '▼'}</div>
+                               </div>
+
+                               {/* Contenido del Acordeón (Los Días) */}
+                               {isExpanded && (
+                                  <div className="p-3 space-y-2 animate-fade-in-fast">
+                                     {cohorte.sesiones.length === 0 ? (
+                                        <div className="text-slate-600 text-[10px] italic text-center py-4">Sin registros esta semana.</div>
+                                     ) : (
+                                        cohorte.sesiones.map(sesion => {
+                                           const isDayExpanded = logExpandido === sesion.id;
+                                           const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
+                                           
+                                           return (
+                                             <div key={sesion.id} className="bg-white/[0.02] border border-white/5 p-3 rounded-xl flex flex-col hover:border-white/10 transition-colors">
+                                               <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
+                                                 <div>
+                                                   <div className="flex items-center gap-2 mb-1">
+                                                     <span className={`text-[8px] md:text-[9px] font-black px-2 py-0.5 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
+                                                     <span className="font-bold text-slate-300 text-[10px] md:text-xs">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
+                                                   </div>
+                                                   {sesion.es_asistencia && (
+                                                     <div className="text-[9px] text-slate-500 font-bold ml-1">Total: <span className="text-slate-400 ml-1">{tonelajeDisplay} {unidad}</span></div>
+                                                   )}
+                                                 </div>
+                                                 <div className="flex items-center gap-3">
+                                                   <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
+                                                 </div>
+                                               </div>
+
+                                               {/* Desglose de ejercicios por día */}
+                                               {isDayExpanded && sesion.es_asistencia && (
+                                                 <div className="mt-3 pt-3 border-t border-white/10 space-y-2 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
+                                                   {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
+                                                     const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                                                     return (
+                                                       <div key={ejIdx} className="bg-black/40 rounded-lg p-2 border border-white/5">
+                                                         <div className="flex justify-between items-center mb-2">
+                                                           <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
+                                                         </div>
+                                                         <div className="space-y-1">
+                                                           {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
+                                                             const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
+                                                             const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
+                                                             return (
+                                                               <div key={sIdx} className="flex justify-between text-[8px] md:text-[9px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
+                                                                 <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
+                                                                 {isCardio ? (
+                                                                   <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
+                                                                 ) : (
+                                                                   <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
+                                                                 )}
+                                                               </div>
+                                                             )
+                                                           })}
+                                                         </div>
+                                                       </div>
+                                                     )
+                                                   })}
+                                                 </div>
+                                               )}
+                                             </div>
+                                           )
+                                        })
+                                     )}
+                                  </div>
+                               )}
                             </div>
                           )
                         })
                       )}
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 md:gap-3">
-                    <button onClick={() => {setView('create_program'); triggerHaptic();}} className="col-span-2 py-3.5 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
-                    <button onClick={exportarDatosCSV} className="py-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 CSV</button>
-                    <button onClick={registrarAusencia} className="py-3.5 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Ausencia </button>
                   </div>
                 </div>
 
