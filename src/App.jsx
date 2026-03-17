@@ -96,13 +96,16 @@ export default function App() {
   const [logExpandido, setLogExpandido] = useState(null) 
   const [fatiga, setFatiga] = useState({ Pecho: 100, Espalda: 100, Piernas: 100, Hombros: 100, Brazos: 100, Core: 100 })
   const [metricas, setMetricas] = useState({})
-  const [rendimientoPrevio, setRendimientoPrevio] = useState({}) // NUEVO: Fantasma de Sobrecarga
+  const [rendimientoPrevio, setRendimientoPrevio] = useState({}) 
 
   const [diaToca, setDiaToca] = useState(1)
   const [ejerciciosHoy, setEjerciciosHoy] = useState([])
   const [workoutData, setWorkoutData] = useState({}) 
   const [timerDescanso, setTimerDescanso] = useState(0)
   const intervalRef = useRef(null)
+  
+  // NUEVO ESTADO: Controla la navegación Maestro-Detalle
+  const [ejercicioExpandido, setEjercicioExpandido] = useState(null)
 
   const hoy = new Date();
   const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
@@ -127,7 +130,7 @@ export default function App() {
   const [catSeries, setCatSeries] = useState(3)
   const [catReps, setCatReps] = useState(10)
   const [catDescanso, setCatDescanso] = useState(60)
-  const [catTipo, setCatTipo] = useState('fuerza') // NUEVO: Selector de Cardio/Fuerza
+  const [catTipo, setCatTipo] = useState('fuerza') 
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
 
   const triggerHaptic = () => { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); }
@@ -144,8 +147,6 @@ export default function App() {
 
   const cargarPrograma = async (userEmail) => {
     const { data: prog } = await supabase.from('programas_entrenamiento').select('*').eq('email_usuario', userEmail).eq('estado', 'ACTIVO').order('id', { ascending: false }).limit(1).maybeSingle();
-    
-    // NUEVO: Traemos tipo_ejercicio y tipo_serie de la BD
     const { data: historialDataCompleto } = await supabase.from('sesiones_familiares')
       .select('id, fecha_registro, es_asistencia, dia_rutina, programa_id, ejercicios_rutina(nombre_ejercicio, tipo_ejercicio, series_ejercicio(numero_serie, peso_kg, repeticiones, tipo_serie))')
       .eq('email_usuario', userEmail).order('fecha_registro', { ascending: false });
@@ -175,17 +176,13 @@ export default function App() {
             if (!statsEjGlobal[nameKey]) statsEjGlobal[nameKey] = { maxPeso: 0 };
             
             if (ej.series_ejercicio && ej.series_ejercicio.length > 0) {
-              // CÁLCULO DE TONELAJE (Solo sumamos series Normales 'N' o sin clasificar, no Warmups 'W')
               const seriesValidas = ej.series_ejercicio.filter(s => s.tipo_serie === 'N' || !s.tipo_serie);
-              
               if (tipoEj === 'fuerza') {
                 seriesValidas.forEach(serie => {
                   tonelaje_kg += (serie.peso_kg * serie.repeticiones);
                   if (serie.peso_kg > statsEjGlobal[nameKey].maxPeso) statsEjGlobal[nameKey].maxPeso = serie.peso_kg; 
                 });
               }
-
-              // SISTEMA FANTASMA: Guardar solo la última sesión completada para mostrarla en el UI
               if (sesion.es_asistencia && !fantasmasPrevios[nameKey] && seriesValidas.length > 0) {
                 if (tipoEj === 'cardio_tiempo') {
                   fantasmasPrevios[nameKey] = `${seriesValidas[0].repeticiones} min @ Nivel ${seriesValidas[0].peso_kg}`;
@@ -199,7 +196,6 @@ export default function App() {
           });
         }
         historialGlobalLimpio.push({ ...sesion, tonelaje: tonelaje_kg });
-        
         if (sesion.es_asistencia && sesion.fecha_registro) {
           const fechaSesionStr = sesion.fecha_registro.substring(0, 10);
           musculosTocados.forEach(m => {
@@ -210,10 +206,7 @@ export default function App() {
       });
     }
 
-    setHistorialGlobal(historialGlobalLimpio);
-    setFatiga(musculosFatigaGlobal);
-    setMetricas(statsEjGlobal);
-    setRendimientoPrevio(fantasmasPrevios);
+    setHistorialGlobal(historialGlobalLimpio); setFatiga(musculosFatigaGlobal); setMetricas(statsEjGlobal); setRendimientoPrevio(fantasmasPrevios);
 
     if (prog) {
       setProgramaActivo(prog);
@@ -267,26 +260,20 @@ export default function App() {
     e.preventDefault(); triggerHaptic();
     if(!catEj) return alert("Escribe un ejercicio");
     const { error } = await supabase.from('catalogo_rutina').insert([{ programa_id: programaActivo.id, dia_asignado: catDia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo }]);
-    if(!error) { 
-      setCatEj(''); 
-      const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true });
-      if (cat) setCatalogo(cat);
-    }
+    if(!error) { setCatEj(''); const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); if (cat) setCatalogo(cat); }
   }
 
   const eliminarEjercicioCatalogo = async (idEjercicio) => { triggerHaptic(); await supabase.from('catalogo_rutina').delete().eq('id', idEjercicio); const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); if (cat) setCatalogo(cat); }
   
   const eliminarSesionHistorica = async (idSesion) => {
-    triggerHaptic();
-    if(!window.confirm("¿Eliminar este registro de operaciones? Se recalculará tu progreso al instante.")) return;
+    triggerHaptic(); if(!window.confirm("¿Eliminar este registro de operaciones? Se recalculará tu progreso al instante.")) return;
     await supabase.from('sesiones_familiares').delete().eq('id', idSesion); cargarPrograma(session.user.email);
   }
 
   const toggleLog = (idSesion) => { triggerHaptic(); setLogExpandido(prev => prev === idSesion ? null : idSesion); }
 
   const exportarDatosCSV = () => {
-    triggerHaptic();
-    if (!historialGlobal || historialGlobal.length === 0) return alert("No hay datos históricos para exportar.");
+    triggerHaptic(); if (!historialGlobal || historialGlobal.length === 0) return alert("No hay datos históricos para exportar.");
     let csvContent = "Fecha_Registro,Dia_Entrenamiento,Nombre_Ejercicio,Tipo_Ejercicio,Numero_Serie,Tipo_Serie,Peso_Nivel,Repeticiones_Minutos,Estimacion_1RM_KG\n";
     historialGlobal.forEach(sesion => {
       const fecha = sesion.fecha_registro.substring(0, 10);
@@ -311,8 +298,7 @@ export default function App() {
   }
 
   const registrarAusencia = async () => {
-    triggerHaptic();
-    if(!window.confirm("¿Registrar ausencia y estirar el calendario?")) return;
+    triggerHaptic(); if(!window.confirm("¿Registrar ausencia y estirar el calendario?")) return;
     const dateIso = new Date(fechaRegistro + 'T12:00:00Z').toISOString();
     await supabase.from('sesiones_familiares').insert([{ email_usuario: session.user.email, es_asistencia: false, programa_id: programaActivo.id, fecha_registro: dateIso }]);
     const nuevaFechaFin = new Date(programaActivo.fecha_fin_estimada); nuevaFechaFin.setDate(nuevaFechaFin.getDate() + 1);
@@ -321,19 +307,15 @@ export default function App() {
   }
 
   const iniciarEntrenamiento = () => {
-    triggerHaptic();
+    triggerHaptic(); setEjercicioExpandido(null); // Resetea la navegación
     const ejHoy = catalogo.filter(c => c.dia_asignado === diaToca);
     const dataInicial = {};
     ejHoy.forEach(ej => {
       const nameKey = ej.nombre_ejercicio.trim().toUpperCase();
       const maxPeso_kg = metricas[nameKey]?.maxPeso || 0; 
       let pesoSugerido = '';
-      if (ej.tipo_ejercicio === 'cardio_tiempo') {
-         pesoSugerido = 0; // Nivel por defecto
-      } else {
-         if (maxPeso_kg > 0) pesoSugerido = unidad === 'lbs' ? (maxPeso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : maxPeso_kg;
-      }
-      
+      if (ej.tipo_ejercicio === 'cardio_tiempo') { pesoSugerido = 0; } 
+      else { if (maxPeso_kg > 0) pesoSugerido = unidad === 'lbs' ? (maxPeso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : maxPeso_kg; }
       dataInicial[ej.id] = Array.from({ length: ej.series_objetivo }, () => ({ peso: pesoSugerido, reps: ej.reps_objetivo, completado: false, tipoSerie: 'N' }));
     });
     setEjerciciosHoy(ejHoy); setWorkoutData(dataInicial); setView('workout'); 
@@ -379,7 +361,6 @@ export default function App() {
           if (newEj) {
               const seriesToInsert = completedSets.map((s, index) => {
                   const valorDigitado = parseFloat(s.peso) || 0;
-                  // Si es cardio, guardamos el nivel directo sin convertir. Si es fuerza, convertimos si está en libras.
                   const pesoParaSQL = (ej.tipo_ejercicio === 'cardio_tiempo') ? valorDigitado : (unidad === 'lbs' ? (valorDigitado / 2.20462) : valorDigitado);
                   return { ejercicio_id: newEj.id, numero_serie: index + 1, peso_kg: pesoParaSQL, repeticiones: parseInt(s.reps) || 0, tipo_serie: s.tipoSerie || 'N' };
               });
@@ -634,7 +615,6 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10">
               <div className="md:col-span-7 flex flex-col gap-6 animate-fade-in stagger-1">
-                
                 <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl">
                   <div className="flex justify-between text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-6 items-center">
                     <span>Progreso Total <InfoIcon title="Progreso" content="Sesiones hechas vs faltantes del plan actual."/></span>
@@ -712,7 +692,6 @@ export default function App() {
                               <div className="mt-4 pt-4 border-t border-white/10 space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
                                 {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
                                   const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
-                                  // Solo calculamos volumen visual para fuerza
                                   const totalEjKg = isCardio ? 0 : (ej.series_ejercicio?.filter(s=> s.tipo_serie==='N' || !s.tipo_serie).reduce((sum, s) => sum + (s.peso_kg * s.repeticiones), 0) || 0);
                                   const totalEjDisplay = unidad === 'lbs' ? (totalEjKg * 2.20462).toFixed(1).replace(/\.0$/, '') : totalEjKg;
                                   return (
@@ -796,12 +775,13 @@ export default function App() {
       })()}
 
       {view === 'workout' && (
-        <div className="p-6 max-w-5xl mx-auto pt-8 pb-24 min-h-[80vh] flex flex-col">
+        <div className="p-6 max-w-5xl mx-auto pt-8 pb-24 min-h-[80vh] flex flex-col relative">
+          
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 animate-fade-in gap-6">
             <h2 className="text-2xl md:text-3xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight text-center md:text-left">🔴 Día {diaToca}</h2>
             <div className="flex gap-2 flex-wrap justify-center">
               <TopBarControles />
-              <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="text-[10px] font-black uppercase tracking-widest bg-white/10 hover:bg-white/20 border border-white/10 px-6 py-2 rounded-xl transition-all text-slate-300 flex items-center justify-center">Pausar</button>
+              <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="text-[10px] font-black uppercase tracking-widest bg-white/10 hover:bg-white/20 border border-white/10 px-6 py-2 rounded-xl transition-all text-slate-300 flex items-center justify-center">Pausar / Salir</button>
             </div>
           </div>
 
@@ -811,7 +791,7 @@ export default function App() {
                 <div className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-center">Descanso</div>
                 <div className="text-7xl lg:text-8xl font-black tabular-nums tracking-tighter text-center" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(timerDescanso)}</div>
               </div>
-              <button onClick={finalizarEntrenamientoHoy} className="hidden lg:block w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-8 hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] active:scale-95 transition-all">✅ Guardar Sesión y Pesos</button>
+              <button onClick={finalizarEntrenamientoHoy} className="hidden lg:block w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-8 hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] active:scale-95 transition-all">✅ Finalizar Rutina</button>
             </div>
 
             <div className="lg:col-span-8 space-y-6 flex flex-col">
@@ -820,89 +800,120 @@ export default function App() {
                   <p className="text-slate-500 text-center italic text-sm">El catálogo para el Día {diaToca} está vacío.</p>
                 </div>
               ) : (
-                ejerciciosHoy.map((ej, idx) => {
-                  const prKey = ej.nombre_ejercicio.trim().toUpperCase();
-                  const esCardio = ej.tipo_ejercicio === 'cardio_tiempo';
-                  
-                  // FANTASMA DE RENDIMIENTO PREVIO
-                  const textoRendimientoAnterior = rendimientoPrevio[prKey];
+                !ejercicioExpandido ? (
+                  // VISTA MAESTRO (Resumen de Ejercicios)
+                  <div className="space-y-4 animate-fade-in flex-1">
+                     <div className="flex justify-between items-center mb-6 px-2">
+                        <h3 className="text-slate-500 font-black uppercase tracking-widest text-xs">Resumen de Operaciones</h3>
+                        <span className="text-cyan-400 font-bold text-xs">{ejerciciosHoy.length} Asignados</span>
+                     </div>
+                     {ejerciciosHoy.map((ej, idx) => {
+                       const completados = workoutData[ej.id]?.filter(s => s.completado && s.tipoSerie === 'N').length || 0;
+                       const totalSeries = ej.series_objetivo;
+                       const terminado = completados >= totalSeries;
+                       const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
 
-                  const setsCompletados = workoutData[ej.id]?.filter(s => s.completado && s.tipoSerie === 'N') || [];
-                  
-                  let max1RM_kg = 0;
-                  if (!esCardio) {
-                    setsCompletados.forEach(set => {
-                      const peso_kg = unidad === 'lbs' ? (parseFloat(set.peso) || 0) / 2.20462 : (parseFloat(set.peso) || 0);
-                      const rm = calcular1RM(peso_kg, set.reps);
-                      if (rm > max1RM_kg) max1RM_kg = rm;
-                    });
-                  }
-                  const display1RM = max1RM_kg > 0 ? (unidad === 'lbs' ? (max1RM_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : max1RM_kg.toFixed(1).replace(/\.0$/, '')) : null;
+                       return (
+                         <div key={ej.id} onClick={() => { setEjercicioExpandido(ej.id); triggerHaptic(); }} className={`p-5 md:p-6 rounded-[2rem] border transition-all cursor-pointer flex items-center justify-between group animate-fade-in ${terminado ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.02] backdrop-blur-xl border-white/[0.05] hover:border-cyan-500/50 hover:bg-white/[0.05]'}`} style={{animationDelay: `${idx * 50}ms`}}>
+                            <div>
+                               <h4 className={`text-base md:text-lg font-black uppercase ${terminado ? 'text-emerald-400' : 'text-white group-hover:text-cyan-400'} transition-colors`}>{ej.nombre_ejercicio}</h4>
+                               <p className="text-[10px] md:text-xs text-slate-500 font-bold mt-1 tracking-widest uppercase">{completados} de {totalSeries} Sets {isCardio ? '(Cardio)' : ''}</p>
+                            </div>
+                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all ${terminado ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/10 group-hover:border-cyan-400/50 text-slate-600 group-hover:text-cyan-400'}`}>
+                               {terminado ? <span className="font-black text-lg">✓</span> : <span className="font-black ml-1">▶</span>}
+                            </div>
+                         </div>
+                       )
+                     })}
+                  </div>
+                ) : (
+                  // VISTA DETALLE (Un Solo Ejercicio Expandido)
+                  <div className="animate-fade-in flex flex-col flex-1">
+                    <button onClick={() => { setEjercicioExpandido(null); triggerHaptic(); }} className="mb-6 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors w-full md:w-fit px-6 py-4 md:py-3 bg-white/5 rounded-2xl border border-white/5 shadow-lg active:scale-95">
+                      ← Volver a la Lista
+                    </button>
+                    
+                    {ejerciciosHoy.filter(e => e.id === ejercicioExpandido).map((ej) => {
+                      const prKey = ej.nombre_ejercicio.trim().toUpperCase();
+                      const esCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                      const textoRendimientoAnterior = rendimientoPrevio[prKey];
+                      const setsCompletados = workoutData[ej.id]?.filter(s => s.completado && s.tipoSerie === 'N') || [];
+                      
+                      let max1RM_kg = 0;
+                      if (!esCardio) {
+                        setsCompletados.forEach(set => {
+                          const peso_kg = unidad === 'lbs' ? (parseFloat(set.peso) || 0) / 2.20462 : (parseFloat(set.peso) || 0);
+                          const rm = calcular1RM(peso_kg, set.reps);
+                          if (rm > max1RM_kg) max1RM_kg = rm;
+                        });
+                      }
+                      const display1RM = max1RM_kg > 0 ? (unidad === 'lbs' ? (max1RM_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : max1RM_kg.toFixed(1).replace(/\.0$/, '')) : null;
 
-                  return (
-                    <div key={ej.id} className="bg-white/[0.02] backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2.5rem] hover:border-white/20 transition-all duration-300 animate-fade-in flex flex-col" style={{animationDelay: `${idx * 100}ms`}}>
-                      <div className="mb-6">
-                        <div className="flex flex-col items-start gap-2">
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-xl font-black uppercase tracking-tight text-white">{ej.nombre_ejercicio}</h3>
-                            <button onClick={() => openBiomecanica(ej.nombre_ejercicio)} className="bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border border-cyan-500/30 transition-all active:scale-95 flex items-center gap-1"><span className="text-sm">🧬</span> Guía</button>
+                      return (
+                        <div key={ej.id} className="bg-white/[0.02] backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2.5rem] hover:border-white/20 transition-all duration-300 flex flex-col flex-1 shadow-2xl">
+                          <div className="mb-6">
+                            <div className="flex flex-col items-start gap-2">
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-2xl font-black uppercase tracking-tight text-white">{ej.nombre_ejercicio}</h3>
+                                <button onClick={() => openBiomecanica(ej.nombre_ejercicio)} className="bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border border-cyan-500/30 transition-all active:scale-95 flex items-center gap-1"><span className="text-sm">🧬</span> Guía</button>
+                              </div>
+                              {textoRendimientoAnterior && (
+                                 <div className="bg-white/5 border border-white/10 text-slate-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2">👻 Última sesión: {textoRendimientoAnterior} {esCardio?'':'kg'}</div>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 font-bold mt-3 tracking-[0.1em]">Objetivo: {ej.series_objetivo}x{ej.reps_objetivo} <span className="ml-2 text-cyan-400/70">• ⏱️ {ej.descanso_segundos}s</span></p>
                           </div>
                           
-                          {/* ETIQUETA DEL FANTASMA */}
-                          {textoRendimientoAnterior && (
-                             <div className="bg-white/5 border border-white/10 text-slate-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2">👻 Última sesión: {textoRendimientoAnterior} {esCardio?'':'kg'}</div>
-                          )}
-
-                        </div>
-                        <p className="text-xs text-slate-500 font-bold mt-3 tracking-[0.1em]">Objetivo: {ej.series_objetivo}x{ej.reps_objetivo} <span className="ml-2 text-cyan-400/70">• ⏱️ {ej.descanso_segundos}s</span></p>
-                      </div>
-                      
-                      <div className="space-y-3 flex-1">
-                        <div className="flex text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-2 mb-2 gap-2">
-                          <div className="w-16 text-center">Set <InfoIcon title="Tipos de Serie" content="N = Normal, W = Calentamiento (No suma a métricas), D = Drop-set"/></div>
-                          <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Nivel/Vel' : `Peso (${unidad})`}</div>
-                          <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Minutos' : 'Reps'}</div>
-                          <div className="w-14 text-center">Status</div>
-                        </div>
-                        {workoutData[ej.id]?.map((set, i) => {
-                          const esW = set.tipoSerie === 'W'; const esD = set.tipoSerie === 'D';
-                          let badgeColor = "bg-white/10 text-slate-400"; // Normal
-                          if (esW) badgeColor = "bg-amber-500/20 text-amber-400 border border-amber-500/30";
-                          if (esD) badgeColor = "bg-rose-500/20 text-rose-400 border border-rose-500/30";
-
-                          return (
-                          <div key={i} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all duration-300 ${set.completado ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}>
-                            
-                            {/* BOTON DE TIPO DE SERIE */}
-                            <button onClick={() => toggleTipoSerie(ej.id, i)} disabled={set.completado || esCardio} className={`w-16 h-10 rounded-xl font-black text-xs flex items-center justify-center transition-all ${badgeColor} disabled:opacity-50`}>
-                              {i + 1} <span className="ml-1 text-[9px]">{set.tipoSerie}</span>
-                            </button>
-
-                            <div className="flex-1 flex flex-col items-center">
-                              <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
-                              {mostrarConversion && set.peso && !esCardio && (<span className="text-[9px] text-cyan-500/50 mt-1 font-bold tracking-widest">{getValorConvertido(set.peso, unidad)}</span>)}
+                          <div className="space-y-3 flex-1">
+                            <div className="flex text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-2 mb-2 gap-2">
+                              <div className="w-16 text-center">Set <InfoIcon title="Tipos de Serie" content="N = Normal, W = Calentamiento (No suma a métricas), D = Drop-set"/></div>
+                              <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Nivel/Vel' : `Peso (${unidad})`}</div>
+                              <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Minutos' : 'Reps'}</div>
+                              <div className="w-14 text-center">Status</div>
                             </div>
-                            <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="flex-1 bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
-                            <button onClick={() => toggleSet(ej.id, i, ej.descanso_segundos)} className={`w-14 h-12 rounded-xl font-black flex items-center justify-center transition-all duration-300 active:scale-90 ${set.completado ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}>✓</button>
-                          </div>
-                        )})}
-                      </div>
+                            {workoutData[ej.id]?.map((set, i) => {
+                              const esW = set.tipoSerie === 'W'; const esD = set.tipoSerie === 'D';
+                              let badgeColor = "bg-white/10 text-slate-400";
+                              if (esW) badgeColor = "bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                              if (esD) badgeColor = "bg-rose-500/20 text-rose-400 border border-rose-500/30";
 
-                      <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center">
-                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
-                          {!esCardio ? <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></> : 'Modo Cardio Activo'}
-                        </span>
-                        <span className={`text-sm font-black ${esCardio ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {!esCardio ? (display1RM ? `${display1RM} ${unidad}` : '--') : '❤️ Z2/Z3'}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })
+                              return (
+                              <div key={i} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all duration-300 ${set.completado ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}>
+                                <button onClick={() => toggleTipoSerie(ej.id, i)} disabled={set.completado || esCardio} className={`w-16 h-10 md:h-12 rounded-xl font-black text-xs flex items-center justify-center transition-all ${badgeColor} disabled:opacity-50`}>
+                                  {i + 1} <span className="ml-1 text-[9px]">{set.tipoSerie}</span>
+                                </button>
+
+                                <div className="flex-1 flex flex-col items-center">
+                                  <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
+                                  {mostrarConversion && set.peso && !esCardio && (<span className="text-[9px] text-cyan-500/50 mt-1 font-bold tracking-widest">{getValorConvertido(set.peso, unidad)}</span>)}
+                                </div>
+                                <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="flex-1 bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
+                                <button onClick={() => toggleSet(ej.id, i, ej.descanso_segundos)} className={`w-14 h-12 rounded-xl font-black flex items-center justify-center transition-all duration-300 active:scale-90 ${set.completado ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}>✓</button>
+                              </div>
+                            )})}
+                          </div>
+
+                          <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center bg-black/20 p-4 rounded-2xl">
+                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
+                              {!esCardio ? <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></> : 'Modo Cardio Activo'}
+                            </span>
+                            <span className={`text-sm font-black ${esCardio ? 'text-rose-400' : 'text-emerald-400'}`}>
+                              {!esCardio ? (display1RM ? `${display1RM} ${unidad}` : '--') : '❤️ Z2/Z3'}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
-          <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-10 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)]">✅ Guardar Sesión y Pesos</button>
+          
+          {/* Botón Flotante para finalizar en Celular (Solo aparece si estás en la vista Maestro) */}
+          {!ejercicioExpandido && (
+             <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-10 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)]">✅ Finalizar Rutina</button>
+          )}
         </div>
       )}
     </AppWrapper>
