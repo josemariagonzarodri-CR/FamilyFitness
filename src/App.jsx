@@ -17,7 +17,6 @@ const PremiumStyles = () => (
   `}</style>
 )
 
-// --- SINTETIZADOR DE AUDIO NATIVO (CERO LATENCIA) ---
 const playBeep = (freq = 440, duration = 200, type = 'sine') => {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -33,10 +32,9 @@ const playBeep = (freq = 440, duration = 200, type = 'sine') => {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + duration / 1000);
-  } catch (e) { console.log('Audio bloqueado por el navegador', e); }
+  } catch (e) { console.log('Audio bloqueado', e); }
 };
 
-// --- ALGORITMO 1RM (EPLEY FORMULA) ---
 const calcular1RM = (peso, reps) => {
   const p = parseFloat(peso) || 0;
   const r = parseInt(reps) || 0;
@@ -46,17 +44,17 @@ const calcular1RM = (peso, reps) => {
 }
 
 const baseBiomecanica = [
-  { keywords: ['press', 'banca', 'pecho', 'chest'], target: 'Pectoral Mayor, Deltoides Frontal, Tríceps', setup: 'Acuéstate con los ojos bajo la barra. Retrae las escápulas y mantén los pies firmes.', ejecucion: 'Baja controladamente hasta el esternón. Empuja explosivamente hacia arriba sin separar hombros.', respiracion: 'Inhala profundo al bajar. Exhala con fuerza al empujar hacia arriba.' },
-  { keywords: ['sentadilla', 'squat', 'pierna'], target: 'Cuádriceps, Glúteos, Core', setup: 'Pies al ancho de hombros, puntas hacia afuera. Barra apoyada en trapecios. Pecho arriba.', ejecucion: 'Inicia llevando cadera atrás y abajo. Rompe el paralelo si puedes y sube empujando el suelo.', respiracion: 'Inhala y llena estómago antes de bajar. Aguanta abajo y exhala al subir.' },
-  { keywords: ['muerto', 'deadlift', 'dl'], target: 'Isquiosurales, Glúteos, Espalda Baja', setup: 'Barra sobre el medio del pie. Espalda completamente recta y rígida. Saca pecho.', ejecucion: 'Empuja el suelo con los pies llevando cadera adelante. La barra debe rozar piernas.', respiracion: 'Inhala profundo abajo. Sube aguantando y exhala al estar de pie.' },
-  { keywords: ['remo', 'row', 'espalda'], target: 'Dorsal Ancho, Romboides, Bíceps', setup: 'Torso inclinado casi paralelo al suelo. Espalda neutra, rodillas semi-flexionadas.', ejecucion: 'Jala codos hacia cadera. Aprieta arriba 1 seg y baja controlado.', respiracion: 'Inhala al bajar el peso. Exhala fuerte al jalar.' },
-  { keywords: ['militar', 'hombro', 'shoulder'], target: 'Deltoides Anterior y Medio, Tríceps', setup: 'Barra a clavículas. Codos ligeramente adelante, no abiertos al 100%.', ejecucion: 'Empuja peso hacia arriba. Controla la bajada hasta la barbilla.', respiracion: 'Inhala abajo. Exhala al empujar hacia arriba.' },
-  { keywords: ['dominada', 'pull', 'jalon', 'lats'], target: 'Dorsal Ancho, Bíceps, Antebrazos', setup: 'Agarre prono más ancho que hombros. Retrae escápulas.', ejecucion: 'Lleva codos hacia costillas, pecho a la barra. Baja lento.', respiracion: 'Inhala colgado. Exhala al subir.' },
-  { keywords: ['bicep', 'curl', 'brazo'], target: 'Bíceps Braquial', setup: 'Codos pegados a las costillas. Sin impulso de espalda.', ejecucion: 'Sube apretando y baja en 3 segundos.', respiracion: 'Inhala al bajar. Exhala al subir.' },
-  { keywords: ['tricep', 'extension', 'copa', 'frances'], target: 'Tríceps (Las 3 cabezas)', setup: 'Codos apuntando fijo. Solo se mueve el antebrazo.', ejecucion: 'Extiende el codo por completo. Controla la bajada.', respiracion: 'Inhala al flexionar. Exhala al extender.' }
+  { keywords: ['press', 'banca', 'pecho', 'chest'], target: 'Pectoral Mayor, Deltoides Frontal, Tríceps', setup: 'Acuéstate con los ojos bajo la barra. Retrae escápulas.', ejecucion: 'Baja controlado. Empuja explosivamente.', respiracion: 'Inhala al bajar. Exhala al empujar.' },
+  { keywords: ['sentadilla', 'squat', 'pierna'], target: 'Cuádriceps, Glúteos, Core', setup: 'Pies al ancho de hombros. Pecho arriba.', ejecucion: 'Rompe el paralelo y sube empujando el suelo.', respiracion: 'Inhala antes de bajar. Exhala al subir.' },
+  { keywords: ['muerto', 'deadlift', 'dl'], target: 'Isquiosurales, Glúteos, Espalda Baja', setup: 'Barra sobre medio del pie. Espalda recta.', ejecucion: 'Empuja el suelo llevando cadera adelante.', respiracion: 'Inhala abajo. Sube aguantando y exhala al final.' },
+  { keywords: ['remo', 'row', 'espalda'], target: 'Dorsal Ancho, Romboides, Bíceps', setup: 'Torso inclinado. Espalda neutra.', ejecucion: 'Jala codos hacia cadera. Aprieta arriba.', respiracion: 'Inhala al bajar. Exhala al jalar.' },
+  { keywords: ['militar', 'hombro', 'shoulder'], target: 'Deltoides Anterior y Medio, Tríceps', setup: 'Barra a clavículas. Codos ligeramente adelante.', ejecucion: 'Empuja peso hacia arriba. Controla bajada.', respiracion: 'Inhala abajo. Exhala al empujar.' },
+  { keywords: ['dominada', 'pull', 'jalon', 'lats'], target: 'Dorsal Ancho, Bíceps', setup: 'Agarre prono. Retrae escápulas.', ejecucion: 'Lleva codos hacia costillas. Baja lento.', respiracion: 'Inhala colgado. Exhala al subir.' },
+  { keywords: ['bicep', 'curl', 'brazo'], target: 'Bíceps Braquial', setup: 'Codos pegados a costillas. Sin impulso.', ejecucion: 'Sube apretando y baja en 3 segundos.', respiracion: 'Inhala al bajar. Exhala al subir.' },
+  { keywords: ['tricep', 'extension', 'copa', 'frances'], target: 'Tríceps', setup: 'Codos fijos. Solo se mueve el antebrazo.', ejecucion: 'Extiende el codo por completo. Controla la bajada.', respiracion: 'Inhala al flexionar. Exhala al extender.' }
 ];
 
-const guiaUniversal = { target: 'Músculo Objetivo', setup: 'Asegura base estable. Espalda neutra, core contraído.', ejecucion: 'Movimiento controlado. 1s concéntrica, 3s excéntrica (bajada).', respiracion: 'Inhala al bajar/estirar. Exhala al hacer el esfuerzo.' };
+const guiaUniversal = { target: 'Músculo Objetivo', setup: 'Asegura base estable. Espalda neutra.', ejecucion: 'Movimiento controlado. 1s concéntrica, 3s excéntrica.', respiracion: 'Inhala al estirar. Exhala al esfuerzo.' };
 
 const buscarGuia = (nombreEjercicio) => {
   const nl = nombreEjercicio.toLowerCase();
@@ -73,7 +71,12 @@ const AppWrapper = ({ children }) => (
 
 export default function App() {
   const [session, setSession] = useState(null)
+  
+  // NUEVO SISTEMA DE LOGIN DE 2 PASOS (OTP)
   const [email, setEmail] = useState('')
+  const [token, setToken] = useState('')
+  const [step, setStep] = useState('email') // Puede ser 'email' o 'token'
+  
   const [view, setView] = useState('login')
   const [loading, setLoading] = useState(false)
 
@@ -171,19 +174,16 @@ export default function App() {
       historialDataCompleto.forEach(sesion => {
         let tonelaje_kg = 0; 
         let musculosTocados = new Set();
-        
         if (sesion.ejercicios_rutina) {
           sesion.ejercicios_rutina.forEach(ej => {
             const name = ej.nombre_ejercicio.toLowerCase();
             const nameKey = ej.nombre_ejercicio.trim().toUpperCase(); 
-            
             if (name.match(/press|pecho|apertura|fly|push|pectoral/)) musculosTocados.add('Pecho');
             if (name.match(/remo|jalon|espalda|pull|dominada|dorsal/)) musculosTocados.add('Espalda');
             if (name.match(/sentadilla|pierna|prensa|curl|extension|femoral|gluteo/)) musculosTocados.add('Piernas');
             if (name.match(/hombro|militar|lateral|frontal|deltoide/)) musculosTocados.add('Hombros');
             if (name.match(/bicep|tricep|brazo|copa|martillo/)) musculosTocados.add('Brazos');
             if (name.match(/abs|core|plancha|abdomen|crunch/)) musculosTocados.add('Core');
-
             if (!statsEjGlobal[nameKey]) statsEjGlobal[nameKey] = { maxPeso: 0 };
             if (ej.series_ejercicio) {
               ej.series_ejercicio.forEach(serie => {
@@ -226,11 +226,27 @@ export default function App() {
     }
   }
 
+  // MOTOR DE LOGIN: ENVÍO DEL CÓDIGO
   const handleLogin = async (e) => {
     e.preventDefault(); triggerHaptic();
     if (email === "dev") { setSession({ user: { email: "admin@titanium.local" } }); cargarPrograma("admin@titanium.local"); return; }
-    setLoading(true); const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) alert(error.message); else alert('⚡ ¡Enlace enviado! Revisa tu bandeja.');
+    setLoading(true); 
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) {
+      alert(error.message);
+    } else {
+      setStep('token'); // Cambiamos la pantalla para pedir el código
+    }
+    setLoading(false);
+  }
+
+  // MOTOR DE LOGIN: VERIFICACIÓN DEL CÓDIGO PIN
+  const handleVerify = async (e) => {
+    e.preventDefault(); triggerHaptic();
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+    if (error) alert('❌ El código es incorrecto o ha expirado. Intenta de nuevo.');
+    // Si es exitoso, el listener de onAuthStateChange hará el resto
     setLoading(false);
   }
 
@@ -370,19 +386,14 @@ export default function App() {
     setFechaRegistro(fDate(hoy)); cargarPrograma(session.user.email); setView('dashboard');
   }
 
-  // --- MOTOR DE AUDIO INTEGRADO EN EL TIMER ---
   const iniciarTimer = (segundos) => {
     clearInterval(intervalRef.current); setTimerDescanso(segundos);
     intervalRef.current = setInterval(() => { 
       setTimerDescanso((prev) => { 
-        if (prev === 4) playBeep(600, 150, 'sine'); // 3
-        if (prev === 3) playBeep(600, 150, 'sine'); // 2
-        if (prev === 2) playBeep(600, 150, 'sine'); // 1
-        if (prev === 1) { 
-          playBeep(900, 600, 'square'); // 0 - Campana larga
-          clearInterval(intervalRef.current); triggerHaptic(); 
-          return 0; 
-        } 
+        if (prev === 4) playBeep(600, 150, 'sine');
+        if (prev === 3) playBeep(600, 150, 'sine');
+        if (prev === 2) playBeep(600, 150, 'sine');
+        if (prev === 1) { playBeep(900, 600, 'square'); clearInterval(intervalRef.current); triggerHaptic(); return 0; } 
         return prev - 1; 
       }); 
     }, 1000);
@@ -399,14 +410,30 @@ export default function App() {
     </div>
   )
 
+  // VISTA DE LOGIN ACTUALIZADA CON OTP (PIN)
   if (view === 'login') {
     return (
       <AppWrapper>
         <div className="min-h-screen flex items-center justify-center p-6">
-          <form onSubmit={handleLogin} className="w-full max-w-md bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-10 rounded-[2rem] shadow-2xl animate-fade-in">
-            <h1 className="text-4xl font-black mb-10 text-center tracking-tighter">TITANIUM <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">CORE</span></h1>
-            <input type="text" placeholder="Correo electrónico (o dev)" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors" required />
-            <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all">{loading ? 'Sincronizando...' : 'Acceso Seguro'}</button>
+          <form onSubmit={step === 'email' ? handleLogin : handleVerify} className="w-full max-w-md bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-10 rounded-[2rem] shadow-2xl animate-fade-in relative overflow-hidden">
+            {/* Elemento de diseño de fondo */}
+            <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-cyan-500/20 rounded-full blur-[50px] pointer-events-none"></div>
+            
+            <h1 className="text-4xl font-black mb-10 text-center tracking-tighter relative z-10">TITANIUM <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">CORE</span></h1>
+            
+            {step === 'email' ? (
+              <div className="animate-fade-in">
+                <input type="email" placeholder="Correo electrónico (o dev)" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors" required />
+                <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all">{loading ? 'Conectando...' : 'Acceso Seguro'}</button>
+              </div>
+            ) : (
+              <div className="animate-fade-in">
+                <p className="text-xs text-slate-400 text-center mb-6 font-bold uppercase tracking-widest">Ingresa el código que enviamos a<br/><span className="text-cyan-400 block mt-2">{email}</span></p>
+                <input type="text" placeholder="------" value={token} onChange={(e) => setToken(e.target.value)} maxLength={6} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-center text-3xl tracking-[0.5em] font-black" required />
+                <button type="submit" className="w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:scale-95 transition-all mb-6">{loading ? 'Verificando...' : 'Verificar y Entrar'}</button>
+                <button type="button" onClick={() => setStep('email')} className="w-full text-[10px] text-slate-500 font-black uppercase tracking-widest hover:text-white transition-colors">← Usar otro correo</button>
+              </div>
+            )}
           </form>
         </div>
       </AppWrapper>
@@ -623,7 +650,7 @@ export default function App() {
 
                 <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
-                    Tendencia de Sobrecarga <InfoIcon title="Curva de Volumen" content="Gráfica de tus últimas 10 sesiones del plan actual. Si las barras suben, estás aplicando sobrecarga progresiva."/>
+                    Tendencia de Sobrecarga <InfoIcon title="Curva de Volumen" content="Gráfica de tus últimas 10 sesiones del plan actual."/>
                   </label>
                   {chartData.length > 0 ? (
                     <div className="h-40 w-full flex items-end justify-between gap-1 md:gap-2 mt-6">
@@ -646,9 +673,21 @@ export default function App() {
                   )}
                 </div>
 
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-5 flex items-center">Mapa de Recuperación Neural</label>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries(fatiga).map(([musculo, nivel]) => {
+                      let colorClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                      if (nivel === 50) colorClass = "bg-amber-500/10 text-amber-400 border-amber-500/20"; 
+                      if (nivel === 0) colorClass = "bg-rose-500/10 text-rose-400 border-rose-500/20"; 
+                      return (<div key={musculo} className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-wider ${colorClass}`}>{musculo}</div>)
+                    })}
+                  </div>
+                </div>
+
                 <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl flex-1 max-h-[600px] flex flex-col">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-5 flex items-center">
-                    Log de Transacciones (Plan Actual) <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
+                    Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
                   </label>
                   <div className="overflow-y-auto pr-2 space-y-3 no-scrollbar flex-1">
                     {historialActivo.length === 0 ? (
@@ -670,7 +709,7 @@ export default function App() {
                                 )}
                               </div>
                               <div className="flex items-center gap-4">
-                                {sesion.es_asistencia && (<span className="text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲ OCULTAR' : '▼ DETALLES'}</span>)}
+                                {sesion.es_asistencia && (<span className="text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
                                 <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-8 h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
                               </div>
                             </div>
@@ -742,8 +781,8 @@ export default function App() {
                 <div className="pt-6 mt-2 border-t border-white/5 space-y-3">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-2 flex items-center">Data & Configuración</label>
                   <button onClick={() => {setView('create_program'); triggerHaptic();}} className="w-full py-4 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 hover:text-cyan-300 text-[10px]">⚙️ Editar Catálogo</button>
-                  <button onClick={exportarDatosCSV} className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[10px] flex items-center justify-center gap-2">📊 Exportar Toda la Data (CSV) <InfoIcon title="Data Export" content="Descarga TODA tu historia médica y deportiva (incluyendo 1RM) en CSV."/></button>
-                  <button onClick={archivarPrograma} className="w-full py-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-amber-500/20 text-[10px] flex items-center justify-center gap-2 mt-4">📦 Archivar Programa <InfoIcon title="Archivar" content="Sella el plan actual y limpia la pantalla."/></button>
+                  <button onClick={exportarDatosCSV} className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[10px] flex items-center justify-center gap-2">📊 Exportar Toda la Data (CSV)</button>
+                  <button onClick={archivarPrograma} className="w-full py-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-amber-500/20 text-[10px] flex items-center justify-center gap-2 mt-4">📦 Archivar Programa</button>
                 </div>
               </div>
             </div>
@@ -786,7 +825,6 @@ export default function App() {
                   const setsCompletados = workoutData[ej.id]?.filter(s => s.completado) || [];
                   const volumenDelEjercicio = setsCompletados.reduce((sum, set) => sum + ((parseFloat(set.peso) || 0) * (parseInt(set.reps) || 0)), 0);
                   
-                  // NUEVO: Cálculo del 1RM estimado en tiempo real de la mejor serie
                   let max1RM_kg = 0;
                   setsCompletados.forEach(set => {
                     const peso_kg = unidad === 'lbs' ? (parseFloat(set.peso) || 0) / 2.20462 : (parseFloat(set.peso) || 0);
@@ -832,17 +870,10 @@ export default function App() {
 
                       <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center">
                         <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
-                          Estimación 1RM <InfoIcon title="One Rep Max" content="Según la fórmula de Epley, este es el peso máximo absoluto que podrías levantar para 1 sola repetición basándose en tus series de hoy."/>
+                          Estimación 1RM <InfoIcon title="One Rep Max" content="Según la fórmula de Epley."/>
                         </span>
                         <span className="text-sm font-black text-emerald-400">
                           {display1RM ? `${display1RM} ${unidad}` : '--'}
-                        </span>
-                      </div>
-                      
-                      <div className="mt-3 pt-3 border-t border-white/5 flex justify-between items-center">
-                        <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">Volumen Total</span>
-                        <span className="text-sm font-black text-cyan-400">
-                          {volumenDelEjercicio > 0 ? `${volumenDelEjercicio} ${unidad}` : '--'}
                         </span>
                       </div>
                     </div>
