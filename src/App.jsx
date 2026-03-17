@@ -72,10 +72,10 @@ const AppWrapper = ({ children }) => (
 export default function App() {
   const [session, setSession] = useState(null)
   
-  // NUEVO SISTEMA DE LOGIN DE 2 PASOS (OTP)
+  // SISTEMA DE LOGIN DE 2 PASOS (OTP)
   const [email, setEmail] = useState('')
   const [token, setToken] = useState('')
-  const [step, setStep] = useState('email') // Puede ser 'email' o 'token'
+  const [step, setStep] = useState('email')
   
   const [view, setView] = useState('login')
   const [loading, setLoading] = useState(false)
@@ -144,8 +144,6 @@ export default function App() {
   const [fechaRegistro, setFechaRegistro] = useState(fDate(hoy))
 
   const triggerHaptic = () => { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); }
-  const openProgPicker = () => { try { dateProgRef.current.showPicker(); } catch (e) { dateProgRef.current.focus(); } }
-  const openTransPicker = () => { try { dateTransRef.current.showPicker(); } catch (e) { dateTransRef.current.focus(); } }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -226,27 +224,20 @@ export default function App() {
     }
   }
 
-  // MOTOR DE LOGIN: ENVÍO DEL CÓDIGO
   const handleLogin = async (e) => {
     e.preventDefault(); triggerHaptic();
     if (email === "dev") { setSession({ user: { email: "admin@titanium.local" } }); cargarPrograma("admin@titanium.local"); return; }
     setLoading(true); 
     const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) {
-      alert(error.message);
-    } else {
-      setStep('token'); // Cambiamos la pantalla para pedir el código
-    }
+    if (error) { alert(error.message); } else { setStep('token'); }
     setLoading(false);
   }
 
-  // MOTOR DE LOGIN: VERIFICACIÓN DEL CÓDIGO PIN
   const handleVerify = async (e) => {
     e.preventDefault(); triggerHaptic();
     setLoading(true);
     const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) alert('❌ El código es incorrecto o ha expirado. Intenta de nuevo.');
-    // Si es exitoso, el listener de onAuthStateChange hará el resto
     setLoading(false);
   }
 
@@ -262,7 +253,7 @@ export default function App() {
 
   const archivarPrograma = async () => {
     triggerHaptic();
-    if(!window.confirm("📦 ¿Archivar este programa? Tu historial se conservará para métricas globales, pero la pantalla se limpiará para un plan nuevo.")) return;
+    if(!window.confirm("📦 ¿Archivar este programa? Tu historial se conservará para métricas globales.")) return;
     await supabase.from('programas_entrenamiento').update({ estado: 'ARCHIVADO' }).eq('id', programaActivo.id);
     setProgramaActivo(null); setCatalogo([]); setHistorialActivo([]); setView('create_program');
   }
@@ -403,24 +394,20 @@ export default function App() {
   const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   const TopBarControles = () => (
-    <div className="flex gap-2 items-center flex-wrap justify-center">
+    <div className="flex gap-2 items-center flex-wrap justify-center z-50">
       <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-4 py-2 rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
       <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
       <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all">Salir</button>
     </div>
   )
 
-  // VISTA DE LOGIN ACTUALIZADA CON OTP (PIN)
   if (view === 'login') {
     return (
       <AppWrapper>
         <div className="min-h-screen flex items-center justify-center p-6">
           <form onSubmit={step === 'email' ? handleLogin : handleVerify} className="w-full max-w-md bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-10 rounded-[2rem] shadow-2xl animate-fade-in relative overflow-hidden">
-            {/* Elemento de diseño de fondo */}
             <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-cyan-500/20 rounded-full blur-[50px] pointer-events-none"></div>
-            
             <h1 className="text-4xl font-black mb-10 text-center tracking-tighter relative z-10">TITANIUM <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">CORE</span></h1>
-            
             {step === 'email' ? (
               <div className="animate-fade-in">
                 <input type="email" placeholder="Correo electrónico (o dev)" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors" required />
@@ -442,7 +429,6 @@ export default function App() {
 
   return (
     <AppWrapper>
-      {/* MODALES */}
       {infoModal.isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-fast" onClick={() => setInfoModal({ isOpen: false, title: '', content: '' })}>
           <div className="bg-slate-900 border border-white/10 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
@@ -486,12 +472,11 @@ export default function App() {
         </div>
       )}
 
-      {/* VISTA: CREATE PROGRAM */}
       {view === 'create_program' && (
         <div className="p-6 max-w-5xl mx-auto pt-10 pb-20">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
             <h2 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight animate-fade-in text-center md:text-left">Diseño Rápido de Arquitectura</h2>
-            {programaActivo && <TopBarControles />}
+            <TopBarControles />
           </div>
           
           {!programaActivo ? (
@@ -507,11 +492,17 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
-                    <div className="flex gap-3 relative">
-                      <button onClick={() => {setFormFecha(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Hoy</button>
-                      <button onClick={() => {setFormFecha(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Ayer</button>
-                      <button onClick={() => { triggerHaptic(); openProgPicker(); }} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(formFecha)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>📅 {![fDate(hoy), fDate(ayer)].includes(formFecha) ? formatDisplayDate(formFecha) : 'Pasada'}</button>
-                      <input type="date" ref={dateProgRef} value={formFecha} onChange={(e) => setFormFecha(e.target.value)} className="absolute w-0 h-0 opacity-0 pointer-events-none" style={{ bottom: 0, left: '50%' }} />
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => {setFormFecha(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Hoy</button>
+                      <button type="button" onClick={() => {setFormFecha(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Ayer</button>
+                      
+                      <div className="flex-1 relative">
+                        <div className={`w-full h-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(formFecha)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+                          📅 {![fDate(hoy), fDate(ayer)].includes(formFecha) ? formatDisplayDate(formFecha) : 'Pasada'}
+                        </div>
+                        <input type="date" value={formFecha} onChange={(e) => setFormFecha(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                      </div>
+
                     </div>
                   </div>
               </div>
@@ -607,7 +598,6 @@ export default function App() {
         </div>
       )}
 
-      {/* VISTA: DASHBOARD */}
       {view === 'dashboard' && (() => {
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
@@ -751,11 +741,17 @@ export default function App() {
               <div className="md:col-span-5 flex flex-col gap-5 animate-fade-in stagger-2">
                 <div className="bg-white/[0.02] backdrop-blur-xl p-6 rounded-[2rem] border border-white/[0.05] shadow-xl relative">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-4 flex items-center">Fecha de la Transacción <InfoIcon title="Máquina del Tiempo" content="Para registrar un día pasado."/></label>
-                  <div className="flex gap-2 relative">
+                  <div className="flex gap-2">
                     <button onClick={() => {setFechaRegistro(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all duration-300 ${fechaRegistro === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Hoy</button>
                     <button onClick={() => {setFechaRegistro(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all duration-300 ${fechaRegistro === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Ayer</button>
-                    <button onClick={() => { triggerHaptic(); openTransPicker(); }} className={`flex-1 py-3 rounded-xl font-bold text-xs flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(fechaRegistro)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>📅 {![fDate(hoy), fDate(ayer)].includes(fechaRegistro) ? formatDisplayDate(fechaRegistro) : 'Pasada'}</button>
-                    <input type="date" ref={dateTransRef} value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} className="absolute w-0 h-0 opacity-0 pointer-events-none" style={{ bottom: 0, left: '50%' }} />
+                    
+                    <div className="flex-1 relative">
+                      <div className={`w-full h-full py-3 rounded-xl font-bold text-xs flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(fechaRegistro)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+                        📅 {![fDate(hoy), fDate(ayer)].includes(fechaRegistro) ? formatDisplayDate(fechaRegistro) : 'Pasada'}
+                      </div>
+                      <input type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </div>
+
                   </div>
                 </div>
 
@@ -790,7 +786,6 @@ export default function App() {
         )
       })()}
 
-      {/* VISTA: WORKOUT */}
       {view === 'workout' && (
         <div className="p-6 max-w-5xl mx-auto pt-8 pb-24 min-h-[80vh] flex flex-col">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 animate-fade-in gap-6">
