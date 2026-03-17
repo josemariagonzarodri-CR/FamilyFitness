@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { db } from './db' 
+// NUEVA IMPORTACIÓN: Librería de gráficos nivel Enterprise
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 
 const PremiumStyles = () => (
   <style>{`
@@ -15,7 +17,6 @@ const PremiumStyles = () => (
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
-    /* Previene el rebote de scroll en iOS */
     body { overscroll-behavior-y: none; }
   `}</style>
 )
@@ -135,10 +136,7 @@ export default function App() {
   const [formFecha, setFormFecha] = useState(fDate(hoy))
   const [formSemanas, setFormSemanas] = useState(6)
   const [formDias, setFormDias] = useState(3)
-  
-  // NUEVO ESTADO: Array de días seleccionados (Ej: [1, 2])
   const [catDias, setCatDias] = useState([1]) 
-  
   const [catEj, setCatEj] = useState('')
   const [catSeries, setCatSeries] = useState(3)
   const [catReps, setCatReps] = useState(10)
@@ -267,12 +265,12 @@ export default function App() {
         if (sesion.es_asistencia && sesion.fecha_registro) {
           const fechaSesionStr = sesion.fecha_registro.substring(0, 10);
           const fHoy = fDate(hoy);
-          const fAyer = new Date(hoy); fAyer.setDate(fAyer.getDate() - 1);
-          const fAntier = new Date(hoy); fAntier.setDate(fAntier.getDate() - 2);
+          const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
+          const antier = new Date(hoy); antier.setDate(antier.getDate() - 2);
 
           musculosTocados.forEach(m => {
             if (fechaSesionStr === fHoy) musculosFatigaGlobal[m] = 0; 
-            else if (fechaSesionStr === fDate(fAyer) || fechaSesionStr === fDate(fAntier)) musculosFatigaGlobal[m] = Math.min(musculosFatigaGlobal[m], 50);
+            else if (fechaSesionStr === fDate(ayer) || fechaSesionStr === fDate(antier)) musculosFatigaGlobal[m] = Math.min(musculosFatigaGlobal[m], 50);
           });
         }
       });
@@ -339,23 +337,13 @@ export default function App() {
        pesoSQL = unidad === 'lbs' ? (val / 2.20462) : val;
     }
 
-    // MULTI-INSERT: Creamos un array con una fila por cada día seleccionado
     const inserts = catDias.map(dia => ({
-      programa_id: programaActivo.id, 
-      dia_asignado: dia, 
-      nombre_ejercicio: catEj, 
-      series_objetivo: catSeries, 
-      reps_objetivo: catReps.toString(), 
-      descanso_segundos: catDescanso, 
-      tipo_ejercicio: catTipo, 
-      peso_objetivo: pesoSQL 
+      programa_id: programaActivo.id, dia_asignado: dia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo, peso_objetivo: pesoSQL 
     }));
 
     const { error } = await supabase.from('catalogo_rutina').insert(inserts);
-    
     if(!error) { 
       setCatEj(''); 
-      // Mantenemos catPeso y catDias seleccionados por si quiere agregar más cosas a esos mismos días
       const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); 
       if (cat) setCatalogo(cat); 
     }
@@ -545,6 +533,19 @@ export default function App() {
     </div>
   )
 
+  // NUEVO: Componente Tooltip personalizado para Recharts
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-xl">
+          <p className="text-white font-bold text-xs uppercase tracking-widest mb-1">{label}</p>
+          <p className="text-cyan-400 font-black">{`${payload[0].value} ${unidad}`}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (view === 'login') {
     return (
       <AppWrapper>
@@ -634,10 +635,8 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                  
-                  {/* LIMPIEZA DE UX: Calendario en Crear Programa */}
                   <div>
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio del Ciclo</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
                     <div className="relative">
                       <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
                         📅 {formatDisplayDate(formFecha) || 'Seleccionar Fecha'}
@@ -645,7 +644,6 @@ export default function App() {
                       <input type="date" value={formFecha} onChange={(e) => {setFormFecha(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
                   </div>
-
               </div>
               <div className="space-y-6 md:space-y-8">
                   <div>
@@ -675,7 +673,6 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 <form onSubmit={agregarEjercicioCatalogo} className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-5 md:p-8 rounded-3xl md:rounded-[2rem] space-y-5 md:space-y-6 shadow-xl h-fit">
                     
-                    {/* SELECTOR DE OPCION MULTIPLE (Catálogo) */}
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 flex items-center">Asignar a los días <InfoIcon title="Selección Múltiple" content="Toca varios días para copiar el ejercicio en todos ellos."/></label>
                       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -689,7 +686,6 @@ export default function App() {
                               onClick={() => {
                                 triggerHaptic();
                                 if (isSelected) {
-                                  // Evitar que desmarque el único día seleccionado
                                   if (catDias.length > 1) setCatDias(catDias.filter(d => d !== diaNum));
                                 } else {
                                   setCatDias([...catDias, diaNum].sort());
@@ -783,8 +779,12 @@ export default function App() {
       {view === 'dashboard' && (() => {
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
+        
         const chartData = historialActivo.filter(h => h.es_asistencia).sort((a,b) => new Date(a.fecha_registro) - new Date(b.fecha_registro)).slice(-10);
-        const maxVolChart = Math.max(...chartData.map(d => d.tonelaje), 1);
+        const chartDataFormatted = chartData.map(d => ({
+            fecha: formatDisplayDate(d.fecha_registro).substring(0,5),
+            volumen: unidad === 'lbs' ? Math.round(d.tonelaje * 2.20462) : Math.round(d.tonelaje)
+        }));
 
         return (
           <div className="p-4 md:p-6 max-w-6xl mx-auto pt-6 md:pt-12">
@@ -822,24 +822,30 @@ export default function App() {
                   <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
                     Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
                   </label>
-                  {chartData.length > 0 ? (
-                    <div className="h-32 md:h-40 w-full flex items-end justify-between gap-1 md:gap-2 mt-4 md:mt-6">
-                       {chartData.map((d, i) => {
-                          const heightPct = Math.max((d.tonelaje / maxVolChart) * 100, 2);
-                          const displayVol = unidad === 'lbs' ? (d.tonelaje * 2.20462).toFixed(0) : Math.round(d.tonelaje);
-                          return (
-                             <div key={i} className="flex flex-col items-center flex-1 group h-full justify-end">
-                                <span className="text-[7px] md:text-[10px] text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity mb-1 md:mb-2 font-black">{displayVol}</span>
-                                <div className="w-full bg-cyan-500/10 rounded-t-md relative flex items-end justify-center group-hover:bg-cyan-500/30 transition-all border-x border-t border-cyan-500/20" style={{ height: `${heightPct}%` }}>
-                                   <div className="absolute bottom-0 w-full bg-gradient-to-t from-cyan-600 to-cyan-300 rounded-t-sm shadow-[0_0_10px_rgba(6,182,212,0.8)]" style={{ height: '3px md:4px' }}></div>
-                                </div>
-                                <span className="text-[6px] md:text-[8px] text-slate-600 mt-2 font-bold">{formatDisplayDate(d.fecha_registro).substring(0,5)}</span>
-                             </div>
-                          )
-                       })}
+                  
+                  {/* NUEVO GRÁFICO RECHARTS TIPO SPLINE AREA */}
+                  {chartDataFormatted.length > 0 ? (
+                    <div className="h-48 md:h-64 w-full mt-4 md:mt-6 -ml-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartDataFormatted} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorVol" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                            <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
+                            <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => val} />
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
+                            <Area type="monotone" dataKey="volumen" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorVol)" activeDot={{ r: 6, fill: "#06b6d4", stroke: "#020617", strokeWidth: 3 }}>
+                               <LabelList dataKey="volumen" position="top" fill="#22d3ee" fontSize={9} fontWeight="bold" offset={10} />
+                            </Area>
+                          </AreaChart>
+                        </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="h-32 md:h-40 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
+                    <div className="h-48 md:h-64 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
                   )}
                 </div>
 
@@ -914,7 +920,6 @@ export default function App() {
 
               <div className="md:col-span-5 flex flex-col gap-4 md:gap-5 animate-fade-in stagger-2">
                 
-                {/* LIMPIEZA DE UX: Calendario en Dashboard */}
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
                   <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
                   <div className="relative">
@@ -927,7 +932,6 @@ export default function App() {
 
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                   
-                  {/* NUEVA BOTONERA TÁCTICA MEJORADA: Selección de Días */}
                   <div>
                     <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
                     <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
