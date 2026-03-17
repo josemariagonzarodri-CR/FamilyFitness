@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { db } from './db' 
-// NUEVA IMPORTACIÓN: Librería de gráficos nivel Enterprise
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 
 const PremiumStyles = () => (
@@ -12,7 +11,6 @@ const PremiumStyles = () => (
     .animate-fade-in-fast { animation: fadeIn 0.2s ease-out forwards; }
     .stagger-1 { animation-delay: 100ms; opacity: 0; }
     .stagger-2 { animation-delay: 200ms; opacity: 0; }
-    .stagger-3 { animation-delay: 300ms; opacity: 0; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -80,6 +78,10 @@ export default function App() {
   const [token, setToken] = useState('')
   const [step, setStep] = useState('email')
   const [view, setView] = useState('login')
+  
+  // NUEVO ESTADO: Control de Pestañas del Dashboard
+  const [dashTab, setDashTab] = useState('resumen') // 'resumen' | 'analiticas'
+
   const [loading, setLoading] = useState(false)
   const [unidad, setUnidad] = useState('kg') 
   const [mostrarConversion, setMostrarConversion] = useState(true)
@@ -528,12 +530,10 @@ export default function App() {
          {isOnline ? (pendingSyncs > 0 ? `${pendingSyncs} PEND.` : 'NUBE') : 'BÚNKER'}
       </div>
       <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
-      <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
       <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">Salir</button>
     </div>
   )
 
-  // NUEVO: Componente Tooltip personalizado para Recharts
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -635,8 +635,9 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+                  
                   <div>
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio del Ciclo</label>
                     <div className="relative">
                       <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
                         📅 {formatDisplayDate(formFecha) || 'Seleccionar Fecha'}
@@ -644,6 +645,7 @@ export default function App() {
                       <input type="date" value={formFecha} onChange={(e) => {setFormFecha(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
                   </div>
+
               </div>
               <div className="space-y-6 md:space-y-8">
                   <div>
@@ -777,6 +779,14 @@ export default function App() {
       )}
 
       {view === 'dashboard' && (() => {
+        
+        // --- CALCULOS DE CUMPLIMIENTO SEMANAL (ROLLING 7 DAYS) ---
+        const date7DaysAgo = new Date();
+        date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
+        const asistenciasUltimos7Dias = historialActivo.filter(h => h.es_asistencia && new Date(h.fecha_registro) >= date7DaysAgo).length;
+        const metaSemanal = programaActivo?.dias_por_semana || 1;
+        const cumplimientoPct = Math.min((asistenciasUltimos7Dias / metaSemanal) * 100, 100);
+
         const progresoPct = estadisticas.totalSesiones > 0 ? Math.min((estadisticas.asistencias / estadisticas.totalSesiones) * 100, 100) : 0;
         const resumenEjerciciosHoy = catalogo.filter(c => c.dia_asignado === diaToca);
         
@@ -788,7 +798,8 @@ export default function App() {
 
         return (
           <div className="p-4 md:p-6 max-w-6xl mx-auto pt-6 md:pt-12">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 md:mb-14 animate-fade-in gap-4 md:gap-4">
+            
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 animate-fade-in gap-4 md:gap-4">
               <div>
                 <h1 className="text-2xl md:text-5xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tighter text-center md:text-left">{programaActivo.nombre_programa}</h1>
                 <p className="text-[10px] md:text-sm text-slate-500 font-bold uppercase mt-1 md:mt-2 tracking-[0.2em] text-center md:text-left">Semana {Math.floor(estadisticas.asistencias / programaActivo.dias_por_semana) + 1} de {programaActivo.semanas_duracion}</p>
@@ -796,181 +807,221 @@ export default function App() {
               <TopBarControles />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">
-              <div className="md:col-span-7 flex flex-col gap-5 md:gap-6 animate-fade-in stagger-1">
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
-                  <div className="flex justify-between text-[9px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-6 items-center">
-                    <span>Progreso Total <InfoIcon title="Progreso" content="Sesiones hechas vs faltantes del plan actual."/></span>
-                    <span className="text-white">{estadisticas.asistencias} / {estadisticas.totalSesiones} Sesiones</span>
-                  </div>
-                  <div className="w-full bg-black/50 rounded-full h-3 md:h-4 mb-6 md:mb-8 border border-white/5 p-1">
-                      <div className="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(6,182,212,0.5)]" style={{ width: `${progresoPct}%` }}></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 md:gap-5">
-                    <div className="bg-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl border border-white/5">
-                      <div className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Teórico <InfoIcon title="Fin Teórico" content="Si vas todos los días sin fallar."/></div>
-                      <div className="font-black text-xs md:text-sm text-white">{formatDisplayDate(programaActivo.fecha_fin_teorica)}</div>
-                    </div>
-                    <div className="bg-red-500/5 p-3 md:p-4 rounded-xl md:rounded-2xl border border-red-500/20">
-                      <div className="text-[8px] md:text-[10px] text-red-400/80 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Ajustado <InfoIcon title="Fin Ajustado" content="La realidad. Si faltas, esto se estira."/></div>
-                      <div className="font-black text-xs md:text-sm text-red-300">{formatDisplayDate(programaActivo.fecha_fin_estimada)}</div>
-                    </div>
-                  </div>
-                </div>
+            {/* NUEVA BARRA DE PESTAÑAS */}
+            <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 mb-6 md:mb-10 w-full max-w-md mx-auto md:mx-0 animate-fade-in">
+              <button onClick={() => {setDashTab('resumen'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${dashTab === 'resumen' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>🏋️ Entrenamiento</button>
+              <button onClick={() => {setDashTab('analiticas'); triggerHaptic();}} className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${dashTab === 'analiticas' ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>📊 Analíticas</button>
+            </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
-                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
-                    Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
-                  </label>
+            {/* ========================================================= */}
+            {/* PESTAÑA 1: ENTRENAMIENTO (Limpia y enfocada en la acción) */}
+            {/* ========================================================= */}
+            {dashTab === 'resumen' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
+                
+                {/* COLUMNA IZQUIERDA: Metas y Cumplimiento */}
+                <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
                   
-                  {/* NUEVO GRÁFICO RECHARTS TIPO SPLINE AREA */}
-                  {chartDataFormatted.length > 0 ? (
-                    <div className="h-48 md:h-64 w-full mt-4 md:mt-6 -ml-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={chartDataFormatted} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="colorVol" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-                            <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
-                            <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => val} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
-                            <Area type="monotone" dataKey="volumen" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorVol)" activeDot={{ r: 6, fill: "#06b6d4", stroke: "#020617", strokeWidth: 3 }}>
-                               <LabelList dataKey="volumen" position="top" fill="#22d3ee" fontSize={9} fontWeight="bold" offset={10} />
-                            </Area>
-                          </AreaChart>
-                        </ResponsiveContainer>
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                    <div className="flex justify-between text-[9px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 items-center">
+                      <span>Progreso Total <InfoIcon title="Progreso" content="Sesiones completadas vs faltantes del plan actual."/></span>
+                      <span className="text-white">{estadisticas.asistencias} / {estadisticas.totalSesiones} Sesiones</span>
                     </div>
-                  ) : (
-                    <div className="h-48 md:h-64 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
-                  )}
+                    <div className="w-full bg-black/50 rounded-full h-3 mb-6 border border-white/5 p-0.5">
+                        <div className="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(6,182,212,0.5)]" style={{ width: `${progresoPct}%` }}></div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                      <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                        <div className="text-[8px] md:text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Teórico <InfoIcon title="Fin Teórico" content="Si vas todos los días sin fallar."/></div>
+                        <div className="font-black text-xs md:text-sm text-white">{formatDisplayDate(programaActivo.fecha_fin_teorica)}</div>
+                      </div>
+                      <div className="bg-red-500/5 p-3 rounded-xl border border-red-500/20">
+                        <div className="text-[8px] md:text-[9px] text-red-400/80 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Ajustado <InfoIcon title="Fin Ajustado" content="La realidad. Si faltas, esto se estira."/></div>
+                        <div className="font-black text-xs md:text-sm text-red-300">{formatDisplayDate(programaActivo.fecha_fin_estimada)}</div>
+                      </div>
+                    </div>
+
+                    {/* NUEVO: CUMPLIMIENTO SEMANAL */}
+                    <div className="pt-4 border-t border-white/5">
+                       <div className="flex justify-between text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-3 items-center">
+                          <span className="text-slate-500 flex items-center">Cumplimiento (Últimos 7 Días) <InfoIcon title="Cumplimiento" content="Cuantas sesiones has hecho en los últimos 7 días vs tu meta de frecuencia semanal."/></span>
+                          <span className={`${cumplimientoPct >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{asistenciasUltimos7Dias} / {metaSemanal} Días</span>
+                       </div>
+                       <div className="w-full bg-black/50 rounded-full h-2 border border-white/5 p-0.5">
+                           <div className={`h-full rounded-full transition-all duration-1000 ${cumplimientoPct >= 100 ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]' : 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'}`} style={{ width: `${cumplimientoPct}%` }}></div>
+                       </div>
+                    </div>
+                  </div>
+
                 </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex-1 max-h-[400px] md:max-h-[600px] flex flex-col">
-                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-5 flex items-center">
-                    Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
-                  </label>
-                  <div className="overflow-y-auto pr-2 space-y-2 md:space-y-3 no-scrollbar flex-1">
-                    {historialActivo.length === 0 ? (
-                      <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
+                {/* COLUMNA DERECHA: Arsenal y Acción */}
+                <div className="md:col-span-6 flex flex-col gap-4 md:gap-5">
+                  
+                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
+                    <div className="relative">
+                      <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
+                        📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
+                      </div>
+                      <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
+                    <div>
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
+                      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
+                        {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} 
+                            className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${diaToca === i + 1 ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                          >
+                            Día {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {resumenEjerciciosHoy.length > 0 ? (
+                      <ul className="space-y-2 md:space-y-3 mb-4 md:mb-6">
+                        {resumenEjerciciosHoy.map(ej => {
+                          const isC = ej.tipo_ejercicio === 'cardio_tiempo';
+                          return (
+                          <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl md:rounded-2xl border border-white/5">
+                            <span className="font-bold text-xs md:text-sm text-white">{ej.nombre_ejercicio}</span>
+                            <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400':'text-cyan-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':''}</span>
+                          </li>
+                        )})}
+                      </ul>
                     ) : (
-                      historialActivo.map(sesion => {
-                        const isExpanded = logExpandido === sesion.id;
-                        const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
-                        return (
-                          <div key={sesion.id} className="bg-black/30 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex flex-col hover:border-white/10 transition-colors group">
-                            <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
-                                  <span className="font-bold text-white text-xs md:text-sm">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
-                                </div>
-                                {sesion.es_asistencia && (
-                                  <div className="text-[10px] md:text-xs text-slate-400 font-bold ml-1 flex items-center">Total Sesión: <span className="text-white ml-1 mr-1">{tonelajeDisplay} {unidad}</span></div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 md:gap-4">
-                                {sesion.es_asistencia && (<span className="text-[8px] md:text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
-                                <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 md:w-8 md:h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
-                              </div>
-                            </div>
-                            {isExpanded && sesion.es_asistencia && (
-                              <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 space-y-2 md:space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
-                                {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
-                                  const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
-                                  const totalEjKg = isCardio ? 0 : (ej.series_ejercicio?.filter(s=> s.tipo_serie==='N' || !s.tipo_serie).reduce((sum, s) => sum + (s.peso_kg * s.repeticiones), 0) || 0);
-                                  const totalEjDisplay = unidad === 'lbs' ? (totalEjKg * 2.20462).toFixed(1).replace(/\.0$/, '') : totalEjKg;
-                                  return (
-                                    <div key={ejIdx} className="bg-white/5 rounded-lg md:rounded-xl p-2 md:p-3 border border-white/5">
-                                      <div className="flex justify-between items-center mb-2 md:mb-3">
-                                        <span className={`text-[10px] md:text-xs font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
-                                        {!isCardio && <span className="text-[8px] md:text-[10px] font-black text-white bg-black/40 px-2 py-0.5 md:py-1 rounded-md border border-white/10">Vol: {totalEjDisplay} {unidad}</span>}
-                                      </div>
-                                      <div className="space-y-1">
-                                        {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
-                                          const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
-                                          const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
-                                          return (
-                                            <div key={sIdx} className="flex justify-between text-[9px] md:text-[10px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
-                                              <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
-                                              {isCardio ? (
-                                                <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
-                                              ) : (
-                                                <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
-                                              )}
-                                            </div>
-                                          )
-                                        })}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
+                      <div className="text-slate-500 text-xs italic text-center py-8 flex-1 flex items-center justify-center">Sin catálogo asignado para el Día {diaToca}.</div>
+                    )}
+                    <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 md:gap-3">
+                    <button onClick={() => {setView('create_program'); triggerHaptic();}} className="col-span-2 py-3.5 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
+                    <button onClick={exportarDatosCSV} className="py-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 CSV</button>
+                    <button onClick={registrarAusencia} className="py-3.5 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Ausencia </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+            {/* ========================================================= */}
+            {/* PESTAÑA 2: ANALÍTICAS (Gráficas y Logs) */}
+            {/* ========================================================= */}
+            {dashTab === 'analiticas' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 animate-fade-in">
+                
+                <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
+                      Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
+                    </label>
+                    
+                    {chartDataFormatted.length > 0 ? (
+                      <div className="h-56 md:h-72 w-full mt-4 md:mt-6 -ml-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartDataFormatted} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="colorVol" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                              <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} dy={10} />
+                              <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => val} />
+                              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ffffff20', strokeWidth: 2 }} />
+                              <Area type="monotone" dataKey="volumen" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorVol)" activeDot={{ r: 6, fill: "#06b6d4", stroke: "#020617", strokeWidth: 3 }}>
+                                 <LabelList dataKey="volumen" position="top" fill="#22d3ee" fontSize={9} fontWeight="bold" offset={10} />
+                              </Area>
+                            </AreaChart>
+                          </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-48 md:h-64 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
                     )}
                   </div>
                 </div>
-              </div>
 
-              <div className="md:col-span-5 flex flex-col gap-4 md:gap-5 animate-fade-in stagger-2">
-                
-                <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
-                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
-                  <div className="relative">
-                    <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
-                      📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
+                <div className="md:col-span-6 flex flex-col gap-5 md:gap-6">
+                  <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex-1 h-[400px] md:h-[600px] flex flex-col">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-5 flex items-center">
+                      Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
+                    </label>
+                    <div className="overflow-y-auto pr-2 space-y-2 md:space-y-3 no-scrollbar flex-1">
+                      {historialActivo.length === 0 ? (
+                        <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
+                      ) : (
+                        historialActivo.map(sesion => {
+                          const isExpanded = logExpandido === sesion.id;
+                          const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
+                          return (
+                            <div key={sesion.id} className="bg-black/30 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex flex-col hover:border-white/10 transition-colors group">
+                              <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
+                                    <span className="font-bold text-white text-xs md:text-sm">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
+                                  </div>
+                                  {sesion.es_asistencia && (
+                                    <div className="text-[10px] md:text-xs text-slate-400 font-bold ml-1 flex items-center">Total Sesión: <span className="text-white ml-1 mr-1">{tonelajeDisplay} {unidad}</span></div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 md:gap-4">
+                                  {sesion.es_asistencia && (<span className="text-[8px] md:text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
+                                  <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 md:w-8 md:h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
+                                </div>
+                              </div>
+                              {isExpanded && sesion.es_asistencia && (
+                                <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 space-y-2 md:space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
+                                  {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
+                                    const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
+                                    const totalEjKg = isCardio ? 0 : (ej.series_ejercicio?.filter(s=> s.tipo_serie==='N' || !s.tipo_serie).reduce((sum, s) => sum + (s.peso_kg * s.repeticiones), 0) || 0);
+                                    const totalEjDisplay = unidad === 'lbs' ? (totalEjKg * 2.20462).toFixed(1).replace(/\.0$/, '') : totalEjKg;
+                                    return (
+                                      <div key={ejIdx} className="bg-white/5 rounded-lg md:rounded-xl p-2 md:p-3 border border-white/5">
+                                        <div className="flex justify-between items-center mb-2 md:mb-3">
+                                          <span className={`text-[10px] md:text-xs font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
+                                          {!isCardio && <span className="text-[8px] md:text-[10px] font-black text-white bg-black/40 px-2 py-0.5 md:py-1 rounded-md border border-white/10">Vol: {totalEjDisplay} {unidad}</span>}
+                                        </div>
+                                        <div className="space-y-1">
+                                          {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
+                                            const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
+                                            const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
+                                            return (
+                                              <div key={sIdx} className="flex justify-between text-[9px] md:text-[10px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
+                                                <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
+                                                {isCardio ? (
+                                                  <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
+                                                ) : (
+                                                  <span className="text-white">{serie.repeticiones} reps <span className="text-slate-500 mx-1">@</span> <span className="text-cyan-400">{pesoDisplay} {unidad}</span></span>
+                                                )}
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
+                      )}
                     </div>
-                    <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   </div>
                 </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
-                  
-                  <div>
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
-                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
-                      {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                        <button 
-                          key={i} 
-                          onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} 
-                          className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${diaToca === i + 1 ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}
-                        >
-                          Día {i + 1}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {resumenEjerciciosHoy.length > 0 ? (
-                    <ul className="space-y-2 md:space-y-3 mb-4 md:mb-6">
-                      {resumenEjerciciosHoy.map(ej => {
-                        const isC = ej.tipo_ejercicio === 'cardio_tiempo';
-                        return (
-                        <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl md:rounded-2xl border border-white/5">
-                          <span className="font-bold text-xs md:text-sm text-white">{ej.nombre_ejercicio}</span>
-                          <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400':'text-cyan-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':''}</span>
-                        </li>
-                      )})}
-                    </ul>
-                  ) : (
-                    <div className="text-slate-500 text-xs italic text-center py-8 flex-1 flex items-center justify-center">Sin catálogo asignado para el Día {diaToca}.</div>
-                  )}
-                  <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
-                </div>
-
-                <div className="pt-4 md:pt-6 border-t border-white/5 space-y-2 md:space-y-3">
-                  <button onClick={() => {setView('create_program'); triggerHaptic();}} className="w-full py-3.5 md:py-4 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
-                  <button onClick={exportarDatosCSV} className="w-full py-3.5 md:py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 Exportar Data (CSV)</button>
-                  <button onClick={registrarAusencia} className="w-full py-3.5 md:py-4 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Registrar Ausencia </button>
-                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })()}
