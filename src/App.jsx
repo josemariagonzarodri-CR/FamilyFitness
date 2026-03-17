@@ -15,7 +15,7 @@ const PremiumStyles = () => (
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
-    /* Previene el rebote de scroll en iOS (Opcional pero recomendado para PWA) */
+    /* Previene el rebote de scroll en iOS */
     body { overscroll-behavior-y: none; }
   `}</style>
 )
@@ -135,7 +135,10 @@ export default function App() {
   const [formFecha, setFormFecha] = useState(fDate(hoy))
   const [formSemanas, setFormSemanas] = useState(6)
   const [formDias, setFormDias] = useState(3)
-  const [catDia, setCatDia] = useState(1)
+  
+  // NUEVO ESTADO: Array de días seleccionados (Ej: [1, 2])
+  const [catDias, setCatDias] = useState([1]) 
+  
   const [catEj, setCatEj] = useState('')
   const [catSeries, setCatSeries] = useState(3)
   const [catReps, setCatReps] = useState(10)
@@ -328,6 +331,7 @@ export default function App() {
   const agregarEjercicioCatalogo = async (e) => {
     e.preventDefault(); triggerHaptic();
     if(!catEj) return alert("Escribe un ejercicio");
+    if(catDias.length === 0) return alert("Selecciona al menos un día para asignar el ejercicio.");
 
     let pesoSQL = 0;
     if (catTipo === 'fuerza' && catPeso !== '') {
@@ -335,11 +339,23 @@ export default function App() {
        pesoSQL = unidad === 'lbs' ? (val / 2.20462) : val;
     }
 
-    const { error } = await supabase.from('catalogo_rutina').insert([{ 
-      programa_id: programaActivo.id, dia_asignado: catDia, nombre_ejercicio: catEj, series_objetivo: catSeries, reps_objetivo: catReps.toString(), descanso_segundos: catDescanso, tipo_ejercicio: catTipo, peso_objetivo: pesoSQL 
-    }]);
+    // MULTI-INSERT: Creamos un array con una fila por cada día seleccionado
+    const inserts = catDias.map(dia => ({
+      programa_id: programaActivo.id, 
+      dia_asignado: dia, 
+      nombre_ejercicio: catEj, 
+      series_objetivo: catSeries, 
+      reps_objetivo: catReps.toString(), 
+      descanso_segundos: catDescanso, 
+      tipo_ejercicio: catTipo, 
+      peso_objetivo: pesoSQL 
+    }));
+
+    const { error } = await supabase.from('catalogo_rutina').insert(inserts);
+    
     if(!error) { 
-      setCatEj(''); setCatPeso('');
+      setCatEj(''); 
+      // Mantenemos catPeso y catDias seleccionados por si quiere agregar más cosas a esos mismos días
       const { data: cat } = await supabase.from('catalogo_rutina').select('*').eq('programa_id', programaActivo.id).order('dia_asignado', { ascending: true }); 
       if (cat) setCatalogo(cat); 
     }
@@ -618,15 +634,18 @@ export default function App() {
                       ))}
                     </div>
                   </div>
+                  
+                  {/* LIMPIEZA DE UX: Calendario en Crear Programa */}
                   <div>
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio del Ciclo</label>
                     <div className="relative">
                       <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
-                        📅 {formatDisplayDate(formFecha)}
+                        📅 {formatDisplayDate(formFecha) || 'Seleccionar Fecha'}
                       </div>
                       <input type="date" value={formFecha} onChange={(e) => {setFormFecha(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </div>
                   </div>
+
               </div>
               <div className="space-y-6 md:space-y-8">
                   <div>
@@ -655,14 +674,36 @@ export default function App() {
               <div className="bg-cyan-500/10 border border-cyan-500/20 py-2.5 md:py-3 px-4 md:px-6 rounded-xl md:rounded-2xl text-cyan-400 text-xs md:text-sm font-bold text-center flex items-center justify-center gap-2"><span className="text-lg md:text-xl">✨</span> Programa '{programaActivo.nombre_programa}' en memoria.</div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 <form onSubmit={agregarEjercicioCatalogo} className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-5 md:p-8 rounded-3xl md:rounded-[2rem] space-y-5 md:space-y-6 shadow-xl h-fit">
+                    
+                    {/* SELECTOR DE OPCION MULTIPLE (Catálogo) */}
                     <div>
-                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 flex items-center">Asignar al</label>
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 flex items-center">Asignar a los días <InfoIcon title="Selección Múltiple" content="Toca varios días para copiar el ejercicio en todos ellos."/></label>
                       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                        {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                          <button key={i} type="button" onClick={() => {setCatDia(i+1); triggerHaptic();}} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 ${catDia === i+1 ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Día {i+1}</button>
-                        ))}
+                        {[...Array(programaActivo.dias_por_semana)].map((_, i) => {
+                          const diaNum = i + 1;
+                          const isSelected = catDias.includes(diaNum);
+                          return (
+                            <button 
+                              key={i} 
+                              type="button" 
+                              onClick={() => {
+                                triggerHaptic();
+                                if (isSelected) {
+                                  // Evitar que desmarque el único día seleccionado
+                                  if (catDias.length > 1) setCatDias(catDias.filter(d => d !== diaNum));
+                                } else {
+                                  setCatDias([...catDias, diaNum].sort());
+                                }
+                              }} 
+                              className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${isSelected ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                            >
+                              Día {diaNum}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
+
                     <div>
                       <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 block">Modalidad de Ejercicio</label>
                       <div className="flex gap-2 mb-3 md:mb-4">
@@ -872,11 +913,13 @@ export default function App() {
               </div>
 
               <div className="md:col-span-5 flex flex-col gap-4 md:gap-5 animate-fade-in stagger-2">
+                
+                {/* LIMPIEZA DE UX: Calendario en Dashboard */}
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
                   <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Selecciona la fecha exacta de tu entrenamiento."/></label>
                   <div className="relative">
                     <div className="w-full py-3 md:py-4 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border bg-white/5 border-white/10 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:bg-white/10">
-                      📅 {formatDisplayDate(fechaRegistro)}
+                      📅 {formatDisplayDate(fechaRegistro) || 'Seleccionar Fecha'}
                     </div>
                     <input type="date" value={fechaRegistro} onChange={(e) => {setFechaRegistro(e.target.value); triggerHaptic();}} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   </div>
@@ -884,12 +927,16 @@ export default function App() {
 
                 <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
                   
-                  {/* BOTONERA TÁCTICA MEJORADA: Selección de Días */}
+                  {/* NUEVA BOTONERA TÁCTICA MEJORADA: Selección de Días */}
                   <div>
-                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Seleccionar Rutina</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 flex items-center">Rutina Seleccionada</label>
                     <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 md:mb-4">
                       {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                        <button key={i} onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 ${diaToca === i + 1 ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>
+                        <button 
+                          key={i} 
+                          onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} 
+                          className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 border ${diaToca === i + 1 ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}
+                        >
                           Día {i + 1}
                         </button>
                       ))}
