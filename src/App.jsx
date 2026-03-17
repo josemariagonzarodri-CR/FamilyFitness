@@ -1,20 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
-import { db } from './db' // NUEVO: Importamos el motor de base de datos local (Dexie)
+import { db } from './db' 
 
 const PremiumStyles = () => (
   <style>{`
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-fade-in { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     .animate-fade-in-fast { animation: fadeIn 0.2s ease-out forwards; }
     .stagger-1 { animation-delay: 100ms; opacity: 0; }
     .stagger-2 { animation-delay: 200ms; opacity: 0; }
-    .stagger-3 { animation-delay: 300ms; opacity: 0; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
+    /* Previene el rebote de scroll en iOS (Opcional pero recomendado para PWA) */
+    body { overscroll-behavior-y: none; }
   `}</style>
 )
 
@@ -65,7 +66,7 @@ const buscarGuia = (nombreEjercicio) => {
 };
 
 const AppWrapper = ({ children }) => (
-  <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-200 font-sans selection:bg-cyan-500/30 pb-12">
+  <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-200 font-sans selection:bg-cyan-500/30 pb-12 overflow-x-hidden">
     <PremiumStyles />
     {children}
   </div>
@@ -81,14 +82,13 @@ export default function App() {
   const [unidad, setUnidad] = useState('kg') 
   const [mostrarConversion, setMostrarConversion] = useState(true)
 
-  // NUEVOS ESTADOS DE RED (OFFLINE-FIRST)
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [pendingSyncs, setPendingSyncs] = useState(0);
 
   const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', content: '' })
   const openInfo = (title, content) => { triggerHaptic(); setInfoModal({ isOpen: true, title, content }); }
   const InfoIcon = ({ title, content }) => (
-    <button type="button" onClick={(e) => { e.preventDefault(); openInfo(title, content); }} className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[9px] font-black hover:bg-cyan-500/30 transition-all active:scale-90">i</button>
+    <button type="button" onClick={(e) => { e.preventDefault(); openInfo(title, content); }} className="ml-1.5 inline-flex items-center justify-center w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[8px] md:text-[9px] font-black hover:bg-cyan-500/30 transition-all active:scale-90">i</button>
   )
   const [bioModal, setBioModal] = useState({ isOpen: false, nombre: '', guia: null })
   const openBiomecanica = (nombreEjercicio) => { triggerHaptic(); setBioModal({ isOpen: true, nombre: nombreEjercicio, guia: buscarGuia(nombreEjercicio) }); }
@@ -147,9 +147,6 @@ export default function App() {
 
   const triggerHaptic = () => { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); }
 
-  // ==========================================
-  // MOTOR DE SINCRONIZACIÓN OFFLINE (DEXIE)
-  // ==========================================
   const checkPendingData = async () => {
     try {
       const count = await db.sesionesPendientes.count();
@@ -164,7 +161,6 @@ export default function App() {
       if (pendientes.length === 0) return;
 
       for (const pSesion of pendientes) {
-        // Subir Sesion a Supabase
         const { data: newSession, error: sessionError } = await supabase.from('sesiones_familiares').insert([{
           email_usuario: pSesion.email_usuario, es_asistencia: pSesion.es_asistencia, programa_id: pSesion.programa_id, dia_rutina: pSesion.dia_rutina, fecha_registro: pSesion.fecha_registro
         }]).select().single();
@@ -186,21 +182,16 @@ export default function App() {
               await supabase.from('series_ejercicio').insert(seriesToInsert);
             }
           }
-          // Limpiar el búnker una vez subido con éxito
           await db.seriesPendientes.where('sesion_local_id').equals(pSesion.id).delete();
           await db.sesionesPendientes.delete(pSesion.id);
         }
       }
       checkPendingData();
-      if(session?.user?.email) cargarPrograma(session.user.email); // Refresca las gráficas
+      if(session?.user?.email) cargarPrograma(session.user.email);
     } catch (e) { console.log("Error en sincronización", e); }
   }
 
-  // ==========================================
-  // INICIALIZACIÓN Y LISTENERS
-  // ==========================================
   useEffect(() => {
-    // Listeners de Red
     const handleOnline = () => { setIsOnline(true); syncDataToCloud(); };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
@@ -441,14 +432,10 @@ export default function App() {
     });
   }
 
-  // ==========================================
-  // LA CÚPULA DE GUARDADO (CLOUD & OFFLINE FAIL-SAFE)
-  // ==========================================
   const finalizarEntrenamientoHoy = async () => {
     triggerHaptic(); detenerTimer();
     const dateIso = new Date(fechaRegistro + 'T12:00:00Z').toISOString();
     
-    // Preparar y filtrar datos reales completados
     const ejerciciosConData = [];
     for (const ej of ejerciciosHoy) {
       const sets = workoutData[ej.id] || [];
@@ -463,7 +450,6 @@ export default function App() {
 
     let savedToCloud = false;
 
-    // INTENTO 1: LA NUBE (Supabase)
     if (isOnline) {
       try {
         const { data: newSession, error: sessionError } = await supabase.from('sesiones_familiares').insert([{ email_usuario: session.user.email, es_asistencia: true, programa_id: programaActivo.id, dia_rutina: diaToca, fecha_registro: dateIso }]).select().single();
@@ -486,7 +472,6 @@ export default function App() {
       } catch(e) { console.log("Fallo la nube, activando búnker", e); }
     }
 
-    // INTENTO 2: EL BÚNKER (Si no hay internet o Supabase falló)
     if (!savedToCloud) {
       try {
         const localSessionId = await db.sesionesPendientes.add({ email_usuario: session.user.email, es_asistencia: true, programa_id: programaActivo.id, dia_rutina: diaToca, fecha_registro: dateIso, estado_sync: 'pendiente' });
@@ -530,34 +515,34 @@ export default function App() {
   const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   const TopBarControles = () => (
-    <div className="flex gap-2 items-center flex-wrap justify-center z-50">
-      <div className={`text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl flex items-center gap-1.5 border ${isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-         <span className={`w-2 h-2 rounded-full ${isOnline ? (pendingSyncs > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400') : 'bg-amber-500'}`}></span>
-         {isOnline ? (pendingSyncs > 0 ? `${pendingSyncs} PENDIENTES` : 'NUBE ACTIVA') : 'MODO BÚNKER'}
+    <div className="flex gap-2 items-center flex-wrap justify-end z-50">
+      <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg md:rounded-xl flex items-center gap-1.5 border ${isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+         <span className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${isOnline ? (pendingSyncs > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400') : 'bg-amber-500'}`}></span>
+         {isOnline ? (pendingSyncs > 0 ? `${pendingSyncs} PEND.` : 'NUBE') : 'BÚNKER'}
       </div>
-      <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-4 py-2 rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
-      <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
-      <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all">Salir</button>
+      <button onClick={() => { triggerHaptic(); setUnidad(u => u === 'kg' ? 'lbs' : 'kg'); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">{unidad === 'kg' ? 'Kg' : 'Lbs'}</button>
+      <button onClick={() => { triggerHaptic(); setMostrarConversion(!mostrarConversion); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all text-slate-300">{mostrarConversion ? '🔀 Dual' : '1️⃣ Único'}</button>
+      <button onClick={() => { triggerHaptic(); setSession(null); supabase.auth.signOut(); }} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl transition-all">Salir</button>
     </div>
   )
 
   if (view === 'login') {
     return (
       <AppWrapper>
-        <div className="min-h-screen flex items-center justify-center p-6">
-          <form onSubmit={step === 'email' ? handleLogin : handleVerify} className="w-full max-w-md bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-10 rounded-[2rem] shadow-2xl animate-fade-in relative overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center p-4 md:p-6">
+          <form onSubmit={step === 'email' ? handleLogin : handleVerify} className="w-full max-w-md bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-6 md:p-10 rounded-[2rem] shadow-2xl animate-fade-in relative overflow-hidden">
             <div className="absolute top-[-50px] right-[-50px] w-32 h-32 bg-cyan-500/20 rounded-full blur-[50px] pointer-events-none"></div>
-            <h1 className="text-4xl font-black mb-10 text-center tracking-tighter relative z-10">TITANIUM <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">CORE</span></h1>
+            <h1 className="text-3xl md:text-4xl font-black mb-8 md:mb-10 text-center tracking-tighter relative z-10">TITANIUM <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">CORE</span></h1>
             {step === 'email' ? (
               <div className="animate-fade-in">
-                <input type="email" placeholder="Correo electrónico (o dev)" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors" required />
-                <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all">{loading ? 'Conectando...' : 'Acceso Seguro'}</button>
+                <input type="email" placeholder="Correo electrónico (o dev)" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/50 border border-white/10 rounded-xl md:rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-sm md:text-base" required />
+                <button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-xl md:rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all text-sm">{loading ? 'Conectando...' : 'Acceso Seguro'}</button>
               </div>
             ) : (
               <div className="animate-fade-in">
-                <p className="text-xs text-slate-400 text-center mb-6 font-bold uppercase tracking-widest">Ingresa el código que enviamos a<br/><span className="text-cyan-400 block mt-2">{email}</span></p>
-                <input type="text" placeholder="--------" value={token} onChange={(e) => setToken(e.target.value)} maxLength={8} className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-center text-3xl tracking-[0.5em] font-black" required />
-                <button type="submit" className="w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 rounded-2xl shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:scale-95 transition-all mb-6">{loading ? 'Verificando...' : 'Verificar y Entrar'}</button>
+                <p className="text-[10px] md:text-xs text-slate-400 text-center mb-6 font-bold uppercase tracking-widest">Ingresa el código que enviamos a<br/><span className="text-cyan-400 block mt-2">{email}</span></p>
+                <input type="text" placeholder="--------" value={token} onChange={(e) => setToken(e.target.value)} maxLength={8} className="w-full bg-black/50 border border-white/10 rounded-xl md:rounded-2xl px-5 py-4 mb-6 focus:border-cyan-400/50 outline-none text-white placeholder-slate-500 transition-colors text-center text-2xl md:text-3xl tracking-[0.5em] font-black" required />
+                <button type="submit" className="w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 rounded-xl md:rounded-2xl shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] active:scale-95 transition-all mb-6 text-sm">{loading ? 'Verificando...' : 'Verificar y Entrar'}</button>
                 <button type="button" onClick={() => setStep('email')} className="w-full text-[10px] text-slate-500 font-black uppercase tracking-widest hover:text-white transition-colors">← Usar otro correo</button>
               </div>
             )}
@@ -571,72 +556,72 @@ export default function App() {
     <AppWrapper>
       {infoModal.isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-fast" onClick={() => setInfoModal({ isOpen: false, title: '', content: '' })}>
-          <div className="bg-slate-900 border border-white/10 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-cyan-400 mb-4 uppercase tracking-widest">{infoModal.title}</h3>
-            <p className="text-slate-300 text-sm leading-relaxed mb-8">{infoModal.content}</p>
-            <button onClick={() => { triggerHaptic(); setInfoModal({ isOpen: false, title: '', content: '' }); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all">Entendido</button>
+          <div className="bg-slate-900 border border-white/10 p-6 md:p-8 rounded-[2rem] max-w-sm w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg md:text-xl font-black text-cyan-400 mb-4 uppercase tracking-widest">{infoModal.title}</h3>
+            <p className="text-slate-300 text-xs md:text-sm leading-relaxed mb-8">{infoModal.content}</p>
+            <button onClick={() => { triggerHaptic(); setInfoModal({ isOpen: false, title: '', content: '' }); }} className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all text-sm">Entendido</button>
           </div>
         </div>
       )}
 
       {bioModal.isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in-fast" onClick={() => setBioModal({ isOpen: false, nombre: '', guia: null })}>
-          <div className="bg-slate-900 border border-cyan-500/30 p-8 rounded-[2.5rem] max-w-lg w-full shadow-[0_0_50px_rgba(6,182,212,0.15)] relative overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
+          <div className="bg-slate-900 border border-cyan-500/30 p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] max-w-lg w-full shadow-[0_0_50px_rgba(6,182,212,0.15)] relative overflow-y-auto max-h-[85vh]" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-6">
               <div>
-                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] block mb-1">Enciclopedia Biomecánica</span>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight">{bioModal.nombre}</h3>
+                <span className="text-[9px] md:text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] block mb-1">Enciclopedia Biomecánica</span>
+                <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">{bioModal.nombre}</h3>
               </div>
               <button onClick={() => { triggerHaptic(); setBioModal({ isOpen: false, nombre: '', guia: null }); }} className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-slate-400 transition-colors">✕</button>
             </div>
-            <div className="space-y-6">
-              <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
-                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">🎯 Músculo Objetivo</div>
-                <div className="text-sm font-bold text-emerald-400">{bioModal.guia.target}</div>
+            <div className="space-y-4 md:space-y-6">
+              <div className="bg-black/30 p-4 rounded-xl md:rounded-2xl border border-white/5">
+                <div className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">🎯 Músculo Objetivo</div>
+                <div className="text-xs md:text-sm font-bold text-emerald-400">{bioModal.guia.target}</div>
               </div>
-              <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
-                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">⚙️ Setup (Postura)</div>
-                <div className="text-sm text-slate-300 leading-relaxed">{bioModal.guia.setup}</div>
+              <div className="bg-black/30 p-4 rounded-xl md:rounded-2xl border border-white/5">
+                <div className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">⚙️ Setup (Postura)</div>
+                <div className="text-xs md:text-sm text-slate-300 leading-relaxed">{bioModal.guia.setup}</div>
               </div>
-              <div className="bg-black/30 p-4 rounded-2xl border border-white/5">
-                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">🚀 Ejecución</div>
-                <div className="text-sm text-slate-300 leading-relaxed">{bioModal.guia.ejecucion}</div>
+              <div className="bg-black/30 p-4 rounded-xl md:rounded-2xl border border-white/5">
+                <div className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">🚀 Ejecución</div>
+                <div className="text-xs md:text-sm text-slate-300 leading-relaxed">{bioModal.guia.ejecucion}</div>
               </div>
-              <div className="bg-cyan-500/10 p-4 rounded-2xl border border-cyan-500/20">
-                <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-2 flex items-center gap-2">🫁 Respiración & Pro-Tip</div>
-                <div className="text-sm text-cyan-100 leading-relaxed">{bioModal.guia.respiracion}</div>
+              <div className="bg-cyan-500/10 p-4 rounded-xl md:rounded-2xl border border-cyan-500/20">
+                <div className="text-[9px] md:text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-2 flex items-center gap-2">🫁 Respiración & Pro-Tip</div>
+                <div className="text-xs md:text-sm text-cyan-100 leading-relaxed">{bioModal.guia.respiracion}</div>
               </div>
             </div>
-            <button onClick={() => { triggerHaptic(); setBioModal({ isOpen: false, nombre: '', guia: null }); }} className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest py-4 rounded-2xl transition-all mt-8">Cerrar Guía</button>
+            <button onClick={() => { triggerHaptic(); setBioModal({ isOpen: false, nombre: '', guia: null }); }} className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest py-3 md:py-4 rounded-xl md:rounded-2xl transition-all mt-6 md:mt-8 text-sm">Cerrar Guía</button>
           </div>
         </div>
       )}
 
       {view === 'create_program' && (
-        <div className="p-6 max-w-5xl mx-auto pt-10 pb-20">
+        <div className="p-4 md:p-6 max-w-5xl mx-auto pt-6 md:pt-10 pb-20">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-            <h2 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight animate-fade-in text-center md:text-left">Diseño Rápido de Arquitectura</h2>
+            <h2 className="text-2xl md:text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight animate-fade-in text-center md:text-left">Diseño Rápido de Arquitectura</h2>
             <TopBarControles />
           </div>
           
           {!programaActivo ? (
-            <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-8 md:p-10 rounded-[2.5rem] grid grid-cols-1 md:grid-cols-2 gap-10 shadow-2xl animate-fade-in stagger-1">
-              <div className="space-y-8">
+            <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-5 md:p-10 rounded-3xl md:rounded-[2.5rem] grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 shadow-2xl animate-fade-in stagger-1">
+              <div className="space-y-6 md:space-y-8">
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Enfoque Principal <InfoIcon title="Enfoques" content="Fuerza Base: Entrenar pesado para ganar fuerza. / Hipertrofia: Peso moderado para ganar tamaño." /></label>
-                    <div className="flex flex-wrap gap-3">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Enfoque Principal <InfoIcon title="Enfoques" content="Fuerza Base: Entrenar pesado para ganar fuerza. / Hipertrofia: Peso moderado para ganar tamaño." /></label>
+                    <div className="flex flex-wrap gap-2 md:gap-3">
                       {['Fuerza Base', 'Hipertrofia', 'Recomposición', 'Mantenimiento'].map(n => (
-                        <button key={n} onClick={() => {setFormNombre(n); triggerHaptic();}} className={`px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${formNombre === n ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>{n}</button>
+                        <button key={n} onClick={() => {setFormNombre(n); triggerHaptic();}} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full text-xs md:text-sm font-bold transition-all duration-300 ${formNombre === n ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>{n}</button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
-                    <div className="flex gap-3">
-                      <button type="button" onClick={() => {setFormFecha(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Hoy</button>
-                      <button type="button" onClick={() => {setFormFecha(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 ${formFecha === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Ayer</button>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Inicio Histórico del Ciclo</label>
+                    <div className="flex gap-2 md:gap-3">
+                      <button type="button" onClick={() => {setFormFecha(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm transition-all duration-300 ${formFecha === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Hoy</button>
+                      <button type="button" onClick={() => {setFormFecha(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm transition-all duration-300 ${formFecha === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Ayer</button>
                       <div className="flex-1 relative">
-                        <div className={`w-full h-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(formFecha)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+                        <div className={`w-full h-full py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(formFecha)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
                           📅 {![fDate(hoy), fDate(ayer)].includes(formFecha) ? formatDisplayDate(formFecha) : 'Pasada'}
                         </div>
                         <input type="date" value={formFecha} onChange={(e) => setFormFecha(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -644,110 +629,110 @@ export default function App() {
                     </div>
                   </div>
               </div>
-              <div className="space-y-8">
+              <div className="space-y-6 md:space-y-8">
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Duración (Semanas)</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Duración (Semanas)</label>
                     <div className="relative">
-                      <select value={formSemanas} onChange={e => {setFormSemanas(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 font-black outline-none appearance-none focus:border-cyan-400/50 cursor-pointer transition-colors text-center text-white text-lg">
+                      <select value={formSemanas} onChange={e => {setFormSemanas(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-5 py-3 md:py-4 font-black outline-none appearance-none focus:border-cyan-400/50 cursor-pointer transition-colors text-center text-white text-base md:text-lg">
                         {[...Array(24)].map((_, i) => (<option key={i+1} value={i+1} className="bg-slate-900">{i + 1}</option>))}
                       </select>
                       <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none text-cyan-400">▼</div>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Frecuencia (Días/Sem)</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Frecuencia (Días/Sem)</label>
                     <div className="relative">
-                      <select value={formDias} onChange={e => {setFormDias(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 font-black outline-none appearance-none focus:border-cyan-400/50 cursor-pointer transition-colors text-center text-white text-lg">
+                      <select value={formDias} onChange={e => {setFormDias(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-5 py-3 md:py-4 font-black outline-none appearance-none focus:border-cyan-400/50 cursor-pointer transition-colors text-center text-white text-base md:text-lg">
                         {[...Array(7)].map((_, i) => (<option key={i+1} value={i+1} className="bg-slate-900">{i + 1}</option>))}
                       </select>
                       <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none text-cyan-400">▼</div>
                     </div>
                   </div>
-                  <button onClick={crearPrograma} className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-2xl mt-4 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all">Forjar Calendario</button>
+                  <button onClick={crearPrograma} className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 rounded-xl md:rounded-2xl mt-2 md:mt-4 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all text-sm">Forjar Calendario</button>
               </div>
             </div>
           ) : (
-            <div className="space-y-8 max-w-4xl mx-auto animate-fade-in stagger-1">
-              <div className="bg-cyan-500/10 border border-cyan-500/20 py-3 px-6 rounded-2xl text-cyan-400 text-sm font-bold text-center flex items-center justify-center gap-2"><span className="text-xl">✨</span> Programa '{programaActivo.nombre_programa}' en memoria.</div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <form onSubmit={agregarEjercicioCatalogo} className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-8 rounded-[2rem] space-y-6 shadow-xl h-fit">
+            <div className="space-y-6 md:space-y-8 max-w-4xl mx-auto animate-fade-in stagger-1">
+              <div className="bg-cyan-500/10 border border-cyan-500/20 py-2.5 md:py-3 px-4 md:px-6 rounded-xl md:rounded-2xl text-cyan-400 text-xs md:text-sm font-bold text-center flex items-center justify-center gap-2"><span className="text-lg md:text-xl">✨</span> Programa '{programaActivo.nombre_programa}' en memoria.</div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+                <form onSubmit={agregarEjercicioCatalogo} className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-5 md:p-8 rounded-3xl md:rounded-[2rem] space-y-5 md:space-y-6 shadow-xl h-fit">
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Asignar al</label>
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 flex items-center">Asignar al</label>
                       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                         {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
-                          <button key={i} type="button" onClick={() => {setCatDia(i+1); triggerHaptic();}} className={`px-5 py-2.5 rounded-full font-bold whitespace-nowrap transition-all duration-300 flex-shrink-0 ${catDia === i+1 ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Día {i+1}</button>
+                          <button key={i} type="button" onClick={() => {setCatDia(i+1); triggerHaptic();}} className={`px-4 py-2 md:px-5 md:py-2.5 rounded-full font-bold text-xs md:text-sm whitespace-nowrap transition-all duration-300 flex-shrink-0 ${catDia === i+1 ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'}`}>Día {i+1}</button>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 block">Modalidad de Ejercicio</label>
-                      <div className="flex gap-2 mb-4">
-                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 rounded-xl text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
-                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 rounded-xl text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio/Tiempo</button>
+                      <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 md:mb-4 block">Modalidad de Ejercicio</label>
+                      <div className="flex gap-2 mb-3 md:mb-4">
+                        <button type="button" onClick={() => setCatTipo('fuerza')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'fuerza' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Fuerza (Kg)</button>
+                        <button type="button" onClick={() => setCatTipo('cardio_tiempo')} className={`flex-1 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-black tracking-widest uppercase transition-all ${catTipo === 'cardio_tiempo' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : 'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'}`}>Cardio/Tiempo</button>
                       </div>
-                      <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : "Ej. Elíptica, Caminadora..."} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600" />
+                      <input type="text" placeholder={catTipo === 'fuerza' ? "Ej. Press de Banca..." : "Ej. Elíptica, Caminadora..."} value={catEj} onChange={e => setCatEj(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-5 py-3 md:py-4 font-bold outline-none focus:border-cyan-400/50 transition-colors text-white placeholder-slate-600 text-sm md:text-base" />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4">
                       <div>
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Series</label>
-                        <select value={catSeries} onChange={e => {setCatSeries(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white focus:border-cyan-400/50">
+                        <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Series</label>
+                        <select value={catSeries} onChange={e => {setCatSeries(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-2 py-3 md:py-3.5 font-bold text-center text-white focus:border-cyan-400/50 text-sm md:text-base">
                           {[1,2,3,4,5,6,7,8,9,10].map(s => (<option key={s} value={s} className="bg-slate-900">{s}</option>))}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">{catTipo === 'fuerza' ? 'Reps' : 'Minutos'}</label>
-                        <select value={catReps} onChange={e => {setCatReps(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white focus:border-cyan-400/50">
+                        <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">{catTipo === 'fuerza' ? 'Reps' : 'Minutos'}</label>
+                        <select value={catReps} onChange={e => {setCatReps(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-2 py-3 md:py-3.5 font-bold text-center text-white focus:border-cyan-400/50 text-sm md:text-base">
                           {[...Array(90)].map((_, i) => (<option key={i+1} value={i+1} className="bg-slate-900">{i + 1}</option>))}
                         </select>
                       </div>
                       
                       {catTipo === 'fuerza' && (
                         <div>
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Peso Base</label>
-                          <input type="number" value={catPeso} onChange={e => setCatPeso(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white outline-none focus:border-cyan-400/50 transition-colors placeholder-slate-600" placeholder={`Ej. 20 ${unidad}`} />
+                          <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Peso Base</label>
+                          <input type="number" value={catPeso} onChange={e => setCatPeso(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-2 py-3 md:py-3.5 font-bold text-center text-white outline-none focus:border-cyan-400/50 transition-colors placeholder-slate-600 text-sm md:text-base" placeholder={`Ej. 20 ${unidad}`} />
                         </div>
                       )}
 
                       <div>
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Desc (s)</label>
-                        <select value={catDescanso} onChange={e => {setCatDescanso(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-2xl px-2 py-3.5 font-bold text-center text-white focus:border-cyan-400/50">
+                        <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">Desc (s)</label>
+                        <select value={catDescanso} onChange={e => {setCatDescanso(Number(e.target.value)); triggerHaptic();}} className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl px-2 py-3 md:py-3.5 font-bold text-center text-white focus:border-cyan-400/50 text-sm md:text-base">
                           <option value="0" className="bg-slate-900">0s (N/A)</option><option value="30" className="bg-slate-900">30s</option><option value="60" className="bg-slate-900">60s</option><option value="90" className="bg-slate-900">90s</option><option value="120" className="bg-slate-900">120s</option>
                         </select>
                       </div>
                     </div>
-                    <button type="submit" className="w-full bg-white/10 text-white font-black uppercase tracking-widest py-4 rounded-2xl mt-4 hover:bg-white/20 border border-white/10 active:scale-95 transition-all">+ Agregar Ejercicio</button>
+                    <button type="submit" className="w-full bg-white/10 text-white font-black uppercase tracking-widest py-3.5 md:py-4 rounded-xl md:rounded-2xl mt-2 md:mt-4 hover:bg-white/20 border border-white/10 active:scale-95 transition-all text-xs md:text-sm">+ Agregar Ejercicio</button>
                 </form>
 
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-8 rounded-[2rem] shadow-xl flex flex-col">
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] p-5 md:p-8 rounded-3xl md:rounded-[2rem] shadow-xl flex flex-col">
                   <div className="flex justify-between items-center mb-4">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Arsenal Registrado</label>
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Arsenal Registrado</label>
                   </div>
-                  <div className="flex-1 overflow-y-auto max-h-[400px] pr-2 space-y-3 no-scrollbar mb-6">
+                  <div className="flex-1 overflow-y-auto max-h-[300px] md:max-h-[400px] pr-2 space-y-2 md:space-y-3 no-scrollbar mb-4 md:mb-6">
                     {catalogo.length === 0 ? (
-                      <div className="text-slate-500 text-sm italic text-center py-10">Aún no hay ejercicios cargados.</div>
+                      <div className="text-slate-500 text-xs md:text-sm italic text-center py-8 md:py-10">Aún no hay ejercicios cargados.</div>
                     ) : (
                       catalogo.map(ej => {
                         const esCardio = ej.tipo_ejercicio === 'cardio_tiempo';
                         return (
-                        <div key={ej.id} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex justify-between items-center hover:border-white/20 transition-colors">
+                        <div key={ej.id} className="bg-white/5 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex justify-between items-center hover:border-white/20 transition-colors">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="bg-cyan-500/20 text-cyan-400 text-[10px] font-black px-2 py-1 rounded-md">DÍA {ej.dia_asignado}</span>
-                              <span className="font-bold text-white text-sm">{ej.nombre_ejercicio}</span>
+                              <span className="bg-cyan-500/20 text-cyan-400 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md">DÍA {ej.dia_asignado}</span>
+                              <span className="font-bold text-white text-xs md:text-sm">{ej.nombre_ejercicio}</span>
                             </div>
-                            <div className={`text-xs font-bold ml-12 ${esCardio ? 'text-rose-400/80' : 'text-slate-400'}`}>
+                            <div className={`text-[10px] md:text-xs font-bold ml-10 md:ml-12 ${esCardio ? 'text-rose-400/80' : 'text-slate-400'}`}>
                               {ej.series_objetivo}x{ej.reps_objetivo} {esCardio?'min':'reps'} 
                               {!esCardio && ej.peso_objetivo > 0 && ` • Base: ${unidad === 'lbs' ? (ej.peso_objetivo * 2.20462).toFixed(1).replace(/\.0$/, '') : ej.peso_objetivo} ${unidad}`}
                               {ej.descanso_segundos>0 && ` • ⏱️${ej.descanso_segundos}s`}
                             </div>
                           </div>
-                          <button onClick={() => eliminarEjercicioCatalogo(ej.id)} className="w-10 h-10 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
+                          <button onClick={() => eliminarEjercicioCatalogo(ej.id)} className="w-8 h-8 md:w-10 md:h-10 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center hover:bg-red-500/20 active:scale-90 transition-all border border-red-500/20">✕</button>
                         </div>
                       )})
                     )}
                   </div>
-                  <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-5 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all mt-auto">✅ Guardar y Activar Programa</button>
+                  <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-widest py-4 md:py-5 rounded-xl md:rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] active:scale-95 transition-all mt-auto text-xs md:text-sm">✅ Guardar y Activar Programa</button>
                 </div>
               </div>
             </div>
@@ -762,67 +747,67 @@ export default function App() {
         const maxVolChart = Math.max(...chartData.map(d => d.tonelaje), 1);
 
         return (
-          <div className="p-6 max-w-6xl mx-auto pt-8 md:pt-12">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-10 md:mb-14 animate-fade-in gap-4">
+          <div className="p-4 md:p-6 max-w-6xl mx-auto pt-6 md:pt-12">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 md:mb-14 animate-fade-in gap-4 md:gap-4">
               <div>
-                <h1 className="text-3xl md:text-5xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tighter text-center md:text-left">{programaActivo.nombre_programa}</h1>
-                <p className="text-xs md:text-sm text-slate-500 font-bold uppercase mt-2 tracking-[0.2em] text-center md:text-left">Semana {Math.floor(estadisticas.asistencias / programaActivo.dias_por_semana) + 1} de {programaActivo.semanas_duracion}</p>
+                <h1 className="text-2xl md:text-5xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tighter text-center md:text-left">{programaActivo.nombre_programa}</h1>
+                <p className="text-[10px] md:text-sm text-slate-500 font-bold uppercase mt-1 md:mt-2 tracking-[0.2em] text-center md:text-left">Semana {Math.floor(estadisticas.asistencias / programaActivo.dias_por_semana) + 1} de {programaActivo.semanas_duracion}</p>
               </div>
               <TopBarControles />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10">
-              <div className="md:col-span-7 flex flex-col gap-6 animate-fade-in stagger-1">
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl">
-                  <div className="flex justify-between text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-6 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">
+              <div className="md:col-span-7 flex flex-col gap-5 md:gap-6 animate-fade-in stagger-1">
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                  <div className="flex justify-between text-[9px] md:text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-6 items-center">
                     <span>Progreso Total <InfoIcon title="Progreso" content="Sesiones hechas vs faltantes del plan actual."/></span>
                     <span className="text-white">{estadisticas.asistencias} / {estadisticas.totalSesiones} Sesiones</span>
                   </div>
-                  <div className="w-full bg-black/50 rounded-full h-4 mb-8 border border-white/5 p-1">
+                  <div className="w-full bg-black/50 rounded-full h-3 md:h-4 mb-6 md:mb-8 border border-white/5 p-1">
                       <div className="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(6,182,212,0.5)]" style={{ width: `${progresoPct}%` }}></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-5">
-                    <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                      <div className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Teórico <InfoIcon title="Fin Teórico" content="Si vas todos los días sin fallar."/></div>
-                      <div className="font-black text-sm text-white">{formatDisplayDate(programaActivo.fecha_fin_teorica)}</div>
+                  <div className="grid grid-cols-2 gap-3 md:gap-5">
+                    <div className="bg-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl border border-white/5">
+                      <div className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Teórico <InfoIcon title="Fin Teórico" content="Si vas todos los días sin fallar."/></div>
+                      <div className="font-black text-xs md:text-sm text-white">{formatDisplayDate(programaActivo.fecha_fin_teorica)}</div>
                     </div>
-                    <div className="bg-red-500/5 p-4 rounded-2xl border border-red-500/20">
-                      <div className="text-[10px] text-red-400/80 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Ajustado <InfoIcon title="Fin Ajustado" content="La realidad. Si faltas, esto se estira."/></div>
-                      <div className="font-black text-sm text-red-300">{formatDisplayDate(programaActivo.fecha_fin_estimada)}</div>
+                    <div className="bg-red-500/5 p-3 md:p-4 rounded-xl md:rounded-2xl border border-red-500/20">
+                      <div className="text-[8px] md:text-[10px] text-red-400/80 font-black uppercase tracking-[0.2em] mb-1 flex items-center">Fin Ajustado <InfoIcon title="Fin Ajustado" content="La realidad. Si faltas, esto se estira."/></div>
+                      <div className="font-black text-xs md:text-sm text-red-300">{formatDisplayDate(programaActivo.fecha_fin_estimada)}</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
-                    Tendencia de Sobrecarga (Solo Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl">
+                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center">
+                    Tendencia de Sobrecarga (Fuerza) <InfoIcon title="Curva de Volumen" content="Suma del peso x repeticiones de tus series normales (N). Excluye calentamientos y cardio."/>
                   </label>
                   {chartData.length > 0 ? (
-                    <div className="h-40 w-full flex items-end justify-between gap-1 md:gap-2 mt-6">
+                    <div className="h-32 md:h-40 w-full flex items-end justify-between gap-1 md:gap-2 mt-4 md:mt-6">
                        {chartData.map((d, i) => {
                           const heightPct = Math.max((d.tonelaje / maxVolChart) * 100, 2);
                           const displayVol = unidad === 'lbs' ? (d.tonelaje * 2.20462).toFixed(0) : Math.round(d.tonelaje);
                           return (
                              <div key={i} className="flex flex-col items-center flex-1 group h-full justify-end">
-                                <span className="text-[8px] md:text-[10px] text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity mb-2 font-black">{displayVol}</span>
+                                <span className="text-[7px] md:text-[10px] text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity mb-1 md:mb-2 font-black">{displayVol}</span>
                                 <div className="w-full bg-cyan-500/10 rounded-t-md relative flex items-end justify-center group-hover:bg-cyan-500/30 transition-all border-x border-t border-cyan-500/20" style={{ height: `${heightPct}%` }}>
-                                   <div className="absolute bottom-0 w-full bg-gradient-to-t from-cyan-600 to-cyan-300 rounded-t-sm shadow-[0_0_10px_rgba(6,182,212,0.8)]" style={{ height: '4px' }}></div>
+                                   <div className="absolute bottom-0 w-full bg-gradient-to-t from-cyan-600 to-cyan-300 rounded-t-sm shadow-[0_0_10px_rgba(6,182,212,0.8)]" style={{ height: '3px md:4px' }}></div>
                                 </div>
-                                <span className="text-[8px] text-slate-600 mt-3 font-bold">{formatDisplayDate(d.fecha_registro).substring(0,5)}</span>
+                                <span className="text-[6px] md:text-[8px] text-slate-600 mt-2 font-bold">{formatDisplayDate(d.fecha_registro).substring(0,5)}</span>
                              </div>
                           )
                        })}
                     </div>
                   ) : (
-                    <div className="h-40 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
+                    <div className="h-32 md:h-40 flex items-center justify-center text-slate-500 text-xs italic">Completa una sesión para generar tu gráfica.</div>
                   )}
                 </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-[2.5rem] p-8 shadow-xl flex-1 max-h-[600px] flex flex-col">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-5 flex items-center">
+                <div className="bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] rounded-3xl md:rounded-[2.5rem] p-5 md:p-8 shadow-xl flex-1 max-h-[400px] md:max-h-[600px] flex flex-col">
+                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 md:mb-5 flex items-center">
                     Log de Transacciones <InfoIcon title="Log Detallado" content="Historial de sesiones del programa en curso."/>
                   </label>
-                  <div className="overflow-y-auto pr-2 space-y-3 no-scrollbar flex-1">
+                  <div className="overflow-y-auto pr-2 space-y-2 md:space-y-3 no-scrollbar flex-1">
                     {historialActivo.length === 0 ? (
                       <div className="text-slate-500 text-xs italic text-center py-10">La bóveda de transacciones está vacía.</div>
                     ) : (
@@ -830,40 +815,40 @@ export default function App() {
                         const isExpanded = logExpandido === sesion.id;
                         const tonelajeDisplay = unidad === 'lbs' ? (sesion.tonelaje * 2.20462).toFixed(1).replace(/\.0$/, '') : sesion.tonelaje;
                         return (
-                          <div key={sesion.id} className="bg-black/30 border border-white/5 p-4 rounded-2xl flex flex-col hover:border-white/10 transition-colors group">
+                          <div key={sesion.id} className="bg-black/30 border border-white/5 p-3 md:p-4 rounded-xl md:rounded-2xl flex flex-col hover:border-white/10 transition-colors group">
                             <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleLog(sesion.id)}>
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-[10px] font-black px-2 py-1 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
-                                  <span className="font-bold text-white text-sm">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
+                                  <span className={`text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-md ${sesion.es_asistencia ? 'bg-cyan-500/20 text-cyan-400' : 'bg-red-500/20 text-red-400'}`}>{sesion.es_asistencia ? `DÍA ${sesion.dia_rutina}` : 'AUSENCIA'}</span>
+                                  <span className="font-bold text-white text-xs md:text-sm">{formatDisplayDate(sesion.fecha_registro.substring(0, 10))}</span>
                                 </div>
                                 {sesion.es_asistencia && (
-                                  <div className="text-xs text-slate-400 font-bold ml-1 flex items-center">Total Sesión: <span className="text-white ml-1 mr-1">{tonelajeDisplay} {unidad}</span></div>
+                                  <div className="text-[10px] md:text-xs text-slate-400 font-bold ml-1 flex items-center">Total Sesión: <span className="text-white ml-1 mr-1">{tonelajeDisplay} {unidad}</span></div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-4">
-                                {sesion.es_asistencia && (<span className="text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
-                                <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-8 h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
+                              <div className="flex items-center gap-2 md:gap-4">
+                                {sesion.es_asistencia && (<span className="text-[8px] md:text-[10px] text-cyan-500/70 font-black tracking-widest">{isExpanded ? '▲' : '▼'}</span>)}
+                                <button onClick={(e) => { e.stopPropagation(); eliminarSesionHistorica(sesion.id); }} className="w-6 h-6 md:w-8 md:h-8 bg-transparent text-slate-600 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 active:scale-90 transition-all border border-transparent opacity-0 group-hover:opacity-100">✕</button>
                               </div>
                             </div>
                             {isExpanded && sesion.es_asistencia && (
-                              <div className="mt-4 pt-4 border-t border-white/10 space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
+                              <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 space-y-2 md:space-y-3 animate-fade-in-fast cursor-default" onClick={e => e.stopPropagation()}>
                                 {sesion.ejercicios_rutina?.map((ej, ejIdx) => {
                                   const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
                                   const totalEjKg = isCardio ? 0 : (ej.series_ejercicio?.filter(s=> s.tipo_serie==='N' || !s.tipo_serie).reduce((sum, s) => sum + (s.peso_kg * s.repeticiones), 0) || 0);
                                   const totalEjDisplay = unidad === 'lbs' ? (totalEjKg * 2.20462).toFixed(1).replace(/\.0$/, '') : totalEjKg;
                                   return (
-                                    <div key={ejIdx} className="bg-white/5 rounded-xl p-3 border border-white/5">
-                                      <div className="flex justify-between items-center mb-3">
-                                        <span className={`text-xs font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
-                                        {!isCardio && <span className="text-[10px] font-black text-white bg-black/40 px-2 py-1 rounded-lg border border-white/10">Vol: {totalEjDisplay} {unidad}</span>}
+                                    <div key={ejIdx} className="bg-white/5 rounded-lg md:rounded-xl p-2 md:p-3 border border-white/5">
+                                      <div className="flex justify-between items-center mb-2 md:mb-3">
+                                        <span className={`text-[10px] md:text-xs font-black uppercase tracking-wider ${isCardio?'text-rose-400':'text-cyan-400'}`}>{ej.nombre_ejercicio}</span>
+                                        {!isCardio && <span className="text-[8px] md:text-[10px] font-black text-white bg-black/40 px-2 py-0.5 md:py-1 rounded-md border border-white/10">Vol: {totalEjDisplay} {unidad}</span>}
                                       </div>
                                       <div className="space-y-1">
                                         {ej.series_ejercicio?.sort((a,b) => a.numero_serie - b.numero_serie).map((serie, sIdx) => {
                                           const pesoDisplay = isCardio ? serie.peso_kg : (unidad === 'lbs' ? (serie.peso_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : serie.peso_kg);
                                           const tipoStr = serie.tipo_serie === 'W' ? '(W)' : (serie.tipo_serie === 'D' ? '(Drop)' : '');
                                           return (
-                                            <div key={sIdx} className="flex justify-between text-[10px] text-slate-300 font-bold border-b border-white/5 pb-1.5 pt-1 last:border-0 last:pb-0">
+                                            <div key={sIdx} className="flex justify-between text-[9px] md:text-[10px] text-slate-300 font-bold border-b border-white/5 pb-1 pt-0.5 last:border-0 last:pb-0">
                                               <span className="text-slate-500 tracking-widest uppercase">Set {serie.numero_serie} <span className="text-amber-500">{tipoStr}</span></span>
                                               {isCardio ? (
                                                 <span className="text-white">{serie.repeticiones} min <span className="text-slate-500 mx-1">@</span> Lvl <span className="text-rose-400">{pesoDisplay}</span></span>
@@ -887,14 +872,14 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="md:col-span-5 flex flex-col gap-5 animate-fade-in stagger-2">
-                <div className="bg-white/[0.02] backdrop-blur-xl p-6 rounded-[2rem] border border-white/[0.05] shadow-xl relative">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-4 flex items-center">Fecha de la Transacción <InfoIcon title="Máquina del Tiempo" content="Para registrar un día pasado."/></label>
+              <div className="md:col-span-5 flex flex-col gap-4 md:gap-5 animate-fade-in stagger-2">
+                <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl relative">
+                  <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block mb-3 md:mb-4 flex items-center">Fecha de Transacción <InfoIcon title="Máquina del Tiempo" content="Para registrar un día pasado."/></label>
                   <div className="flex gap-2">
-                    <button onClick={() => {setFechaRegistro(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all duration-300 ${fechaRegistro === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Hoy</button>
-                    <button onClick={() => {setFechaRegistro(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all duration-300 ${fechaRegistro === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Ayer</button>
+                    <button onClick={() => {setFechaRegistro(fDate(hoy)); triggerHaptic();}} className={`flex-1 py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs transition-all duration-300 ${fechaRegistro === fDate(hoy) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Hoy</button>
+                    <button onClick={() => {setFechaRegistro(fDate(ayer)); triggerHaptic();}} className={`flex-1 py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs transition-all duration-300 ${fechaRegistro === fDate(ayer) ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10'}`}>Ayer</button>
                     <div className="flex-1 relative">
-                      <div className={`w-full h-full py-3 rounded-xl font-bold text-xs flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(fechaRegistro)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+                      <div className={`w-full h-full py-2.5 md:py-3 rounded-xl font-bold text-[10px] md:text-xs flex items-center justify-center transition-all duration-300 border ${(![fDate(hoy), fDate(ayer)].includes(fechaRegistro)) ? 'bg-cyan-500 text-black border-transparent shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
                         📅 {![fDate(hoy), fDate(ayer)].includes(fechaRegistro) ? formatDisplayDate(fechaRegistro) : 'Pasada'}
                       </div>
                       <input type="date" value={fechaRegistro} onChange={(e) => setFechaRegistro(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -902,29 +887,38 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white/[0.02] backdrop-blur-xl p-6 rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center">Arsenal del Día {diaToca}</label>
+                <div className="bg-white/[0.02] backdrop-blur-xl p-5 md:p-6 rounded-3xl md:rounded-[2rem] border border-white/[0.05] shadow-xl flex-1 flex flex-col">
+                  
+                  <div className="flex justify-between items-center mb-3 md:mb-4">
+                    <label className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center">Arsenal del Día</label>
+                    <div className="flex gap-1 bg-black/40 p-1 rounded-xl md:rounded-2xl border border-white/5">
+                      {[...Array(programaActivo.dias_por_semana)].map((_, i) => (
+                        <button key={i} onClick={() => { setDiaToca(i + 1); triggerHaptic(); }} className={`w-7 h-7 md:w-8 md:h-8 rounded-lg md:rounded-xl font-black text-[9px] md:text-[10px] transition-all ${diaToca === i + 1 ? 'bg-cyan-500 text-black shadow-[0_0_10px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}>{i + 1}</button>
+                      ))}
+                    </div>
+                  </div>
+
                   {resumenEjerciciosHoy.length > 0 ? (
-                    <ul className="space-y-3 mb-6">
+                    <ul className="space-y-2 md:space-y-3 mb-4 md:mb-6">
                       {resumenEjerciciosHoy.map(ej => {
                         const isC = ej.tipo_ejercicio === 'cardio_tiempo';
                         return (
-                        <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
-                          <span className="font-bold text-sm text-white">{ej.nombre_ejercicio}</span>
-                          <span className={`text-xs font-bold ${isC ? 'text-rose-400':'text-cyan-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':''}</span>
+                        <li key={ej.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl md:rounded-2xl border border-white/5">
+                          <span className="font-bold text-xs md:text-sm text-white">{ej.nombre_ejercicio}</span>
+                          <span className={`text-[10px] md:text-xs font-bold ${isC ? 'text-rose-400':'text-cyan-400'}`}>{ej.series_objetivo}x{ej.reps_objetivo} {isC?'min':''}</span>
                         </li>
                       )})}
                     </ul>
                   ) : (
-                    <div className="text-slate-500 text-xs italic text-center py-10 flex-1 flex items-center justify-center">Sin catálogo asignado para este día.</div>
+                    <div className="text-slate-500 text-xs italic text-center py-8 flex-1 flex items-center justify-center">Sin catálogo asignado para el Día {diaToca}.</div>
                   )}
-                  <button onClick={iniciarEntrenamiento} className="w-full h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-lg rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
+                  <button onClick={iniciarEntrenamiento} className="w-full h-16 md:h-20 bg-gradient-to-r from-cyan-500 to-blue-500 text-black font-black uppercase tracking-[0.2em] text-sm md:text-lg rounded-xl md:rounded-2xl hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-95 transition-all mt-auto">▶ Iniciar Día {diaToca}</button>
                 </div>
 
-                <div className="pt-6 border-t border-white/5 space-y-3">
-                  <button onClick={() => {setView('create_program'); triggerHaptic();}} className="w-full py-4 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[10px]">⚙️ Editar Catálogo</button>
-                  <button onClick={exportarDatosCSV} className="w-full py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[10px]">📊 Exportar Data (CSV)</button>
-                  <button onClick={registrarAusencia} className="w-full py-4 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[10px]">⏸️ Registrar Ausencia </button>
+                <div className="pt-4 md:pt-6 border-t border-white/5 space-y-2 md:space-y-3">
+                  <button onClick={() => {setView('create_program'); triggerHaptic();}} className="w-full py-3.5 md:py-4 bg-white/[0.02] border border-white/10 text-cyan-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⚙️ Editar Catálogo</button>
+                  <button onClick={exportarDatosCSV} className="w-full py-3.5 md:py-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-emerald-500/20 text-[9px] md:text-[10px]">📊 Exportar Data (CSV)</button>
+                  <button onClick={registrarAusencia} className="w-full py-3.5 md:py-4 bg-transparent border border-white/10 text-slate-400 font-black uppercase tracking-[0.2em] rounded-xl md:rounded-[1.5rem] active:scale-95 transition-all hover:bg-white/5 text-[9px] md:text-[10px]">⏸️ Registrar Ausencia </button>
                 </div>
               </div>
             </div>
@@ -933,36 +927,40 @@ export default function App() {
       })()}
 
       {view === 'workout' && (
-        <div className="p-6 max-w-5xl mx-auto pt-8 pb-24 min-h-[80vh] flex flex-col relative">
+        <div className="p-4 md:p-6 max-w-5xl mx-auto pt-6 md:pt-8 pb-20 md:pb-24 min-h-[80vh] flex flex-col relative">
           
-          <div className="flex flex-col md:flex-row justify-between items-center mb-8 animate-fade-in gap-6">
-            <h2 className="text-2xl md:text-3xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight text-center md:text-left">🔴 Día {diaToca}</h2>
-            <div className="flex gap-2 flex-wrap justify-center">
+          <div className="flex flex-row justify-between items-center mb-6 md:mb-8 animate-fade-in gap-4 z-50">
+            <h2 className="text-xl md:text-3xl font-black uppercase bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight">🔴 Día {diaToca}</h2>
+            <div className="flex gap-2 flex-wrap justify-end">
               <TopBarControles />
-              <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="text-[10px] font-black uppercase tracking-widest bg-white/10 hover:bg-white/20 border border-white/10 px-6 py-2 rounded-xl transition-all text-slate-300 flex items-center justify-center">Pausar / Salir</button>
+              <button onClick={() => {setView('dashboard'); triggerHaptic();}} className="text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-white/10 hover:bg-white/20 border border-white/10 px-4 md:px-6 py-1.5 md:py-2 rounded-lg md:rounded-xl transition-all text-slate-300 flex items-center justify-center">Pausar / Salir</button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 flex-1">
+            
+            {/* CRONÓMETRO: Delgado y pegajoso en móvil, grande en PC */}
             <div className="lg:col-span-4 animate-fade-in stagger-1">
-              <div className={`flex flex-col items-center justify-center p-10 rounded-[2.5rem] border transition-all duration-500 sticky top-8 backdrop-blur-xl min-h-[250px] ${timerDescanso > 0 ? 'bg-cyan-500/10 border-cyan-400/50 text-cyan-400 shadow-[0_0_50px_rgba(6,182,212,0.15)]' : 'bg-white/[0.02] border-white/10 text-slate-500'}`}>
-                <div className="text-[10px] font-black uppercase tracking-[0.3em] mb-4 text-center">Descanso</div>
-                <div className="text-7xl lg:text-8xl font-black tabular-nums tracking-tighter text-center" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(timerDescanso)}</div>
+              <div className={`flex flex-row lg:flex-col items-center justify-between lg:justify-center p-4 lg:p-10 rounded-2xl lg:rounded-[2.5rem] border transition-all duration-500 sticky top-2 lg:top-8 backdrop-blur-2xl z-40 shadow-2xl ${timerDescanso > 0 ? 'bg-cyan-950/90 border-cyan-400/50 text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'bg-slate-900/90 border-white/10 text-slate-400'}`}>
+                <div className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] lg:mb-4 text-left lg:text-center flex items-center gap-2">
+                   {timerDescanso > 0 ? <span className="w-2 h-2 md:w-3 md:h-3 rounded-full bg-cyan-400 animate-pulse"></span> : '⏱️'} Descanso
+                </div>
+                <div className="text-4xl lg:text-8xl font-black tabular-nums tracking-tighter text-right lg:text-center" style={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(timerDescanso)}</div>
               </div>
               <button onClick={finalizarEntrenamientoHoy} className="hidden lg:block w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-8 hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] active:scale-95 transition-all">✅ Finalizar Rutina</button>
             </div>
 
-            <div className="lg:col-span-8 space-y-6 flex flex-col">
+            <div className="lg:col-span-8 space-y-5 md:space-y-6 flex flex-col">
               {ejerciciosHoy.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center p-10 bg-white/[0.02] border border-white/5 rounded-[2.5rem] animate-fade-in">
                   <p className="text-slate-500 text-center italic text-sm">El catálogo para el Día {diaToca} está vacío.</p>
                 </div>
               ) : (
                 !ejercicioExpandido ? (
-                  <div className="space-y-4 animate-fade-in flex-1">
-                     <div className="flex justify-between items-center mb-6 px-2">
-                        <h3 className="text-slate-500 font-black uppercase tracking-widest text-xs">Resumen de Operaciones</h3>
-                        <span className="text-cyan-400 font-bold text-xs">{ejerciciosHoy.length} Asignados</span>
+                  <div className="space-y-3 md:space-y-4 animate-fade-in flex-1">
+                     <div className="flex justify-between items-center mb-4 md:mb-6 px-1 md:px-2">
+                        <h3 className="text-slate-500 font-black uppercase tracking-widest text-[10px] md:text-xs">Resumen de Operaciones</h3>
+                        <span className="text-cyan-400 font-bold text-[10px] md:text-xs">{ejerciciosHoy.length} Asignados</span>
                      </div>
                      {ejerciciosHoy.map((ej, idx) => {
                        const completados = workoutData[ej.id]?.filter(s => s.completado && s.tipoSerie === 'N').length || 0;
@@ -971,13 +969,13 @@ export default function App() {
                        const isCardio = ej.tipo_ejercicio === 'cardio_tiempo';
 
                        return (
-                         <div key={ej.id} onClick={() => { setEjercicioExpandido(ej.id); triggerHaptic(); }} className={`p-5 md:p-6 rounded-[2rem] border transition-all cursor-pointer flex items-center justify-between group animate-fade-in ${terminado ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.02] backdrop-blur-xl border-white/[0.05] hover:border-cyan-500/50 hover:bg-white/[0.05]'}`} style={{animationDelay: `${idx * 50}ms`}}>
+                         <div key={ej.id} onClick={() => { setEjercicioExpandido(ej.id); triggerHaptic(); }} className={`p-4 md:p-6 rounded-3xl md:rounded-[2rem] border transition-all cursor-pointer flex items-center justify-between group animate-fade-in ${terminado ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/[0.02] backdrop-blur-xl border-white/[0.05] hover:border-cyan-500/50 hover:bg-white/[0.05]'}`} style={{animationDelay: `${idx * 50}ms`}}>
                             <div>
-                               <h4 className={`text-base md:text-lg font-black uppercase ${terminado ? 'text-emerald-400' : 'text-white group-hover:text-cyan-400'} transition-colors`}>{ej.nombre_ejercicio}</h4>
-                               <p className="text-[10px] md:text-xs text-slate-500 font-bold mt-1 tracking-widest uppercase">{completados} de {totalSeries} Sets {isCardio ? '(Cardio)' : ''}</p>
+                               <h4 className={`text-sm md:text-lg font-black uppercase ${terminado ? 'text-emerald-400' : 'text-white group-hover:text-cyan-400'} transition-colors`}>{ej.nombre_ejercicio}</h4>
+                               <p className="text-[9px] md:text-xs text-slate-500 font-bold mt-1 tracking-widest uppercase">{completados} de {totalSeries} Sets {isCardio ? '(Cardio)' : ''}</p>
                             </div>
                             <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center transition-all ${terminado ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-white/10 group-hover:border-cyan-400/50 text-slate-600 group-hover:text-cyan-400'}`}>
-                               {terminado ? <span className="font-black text-lg">✓</span> : <span className="font-black ml-1">▶</span>}
+                               {terminado ? <span className="font-black text-base md:text-lg">✓</span> : <span className="font-black text-sm md:text-base ml-0.5 md:ml-1">▶</span>}
                             </div>
                          </div>
                        )
@@ -985,7 +983,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="animate-fade-in flex flex-col flex-1">
-                    <button onClick={() => { setEjercicioExpandido(null); triggerHaptic(); }} className="mb-6 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors w-full md:w-fit px-6 py-4 md:py-3 bg-white/5 rounded-2xl border border-white/5 shadow-lg active:scale-95">
+                    <button onClick={() => { setEjercicioExpandido(null); triggerHaptic(); }} className="mb-4 md:mb-6 text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors w-full md:w-fit px-5 md:px-6 py-3 md:py-3 bg-white/5 rounded-xl md:rounded-2xl border border-white/5 shadow-lg active:scale-95">
                       ← Volver a la Lista
                     </button>
                     
@@ -1006,54 +1004,61 @@ export default function App() {
                       const display1RM = max1RM_kg > 0 ? (unidad === 'lbs' ? (max1RM_kg * 2.20462).toFixed(1).replace(/\.0$/, '') : max1RM_kg.toFixed(1).replace(/\.0$/, '')) : null;
 
                       return (
-                        <div key={ej.id} className="bg-white/[0.02] backdrop-blur-xl border border-white/[0.05] p-6 md:p-8 rounded-[2.5rem] hover:border-white/20 transition-all duration-300 flex flex-col flex-1 shadow-2xl">
-                          <div className="mb-6">
+                        <div key={ej.id} className="bg-white/[0.02] backdrop-blur-xl border border-white/[0.05] p-5 md:p-8 rounded-3xl md:rounded-[2.5rem] flex flex-col flex-1 shadow-2xl">
+                          <div className="mb-5 md:mb-6">
                             <div className="flex flex-col items-start gap-2">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-2xl font-black uppercase tracking-tight text-white">{ej.nombre_ejercicio}</h3>
-                                <button onClick={() => openBiomecanica(ej.nombre_ejercicio)} className="bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border border-cyan-500/30 transition-all active:scale-95 flex items-center gap-1"><span className="text-sm">🧬</span> Guía</button>
+                              <div className="flex items-center gap-2 md:gap-3">
+                                <h3 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white">{ej.nombre_ejercicio}</h3>
+                                <button onClick={() => openBiomecanica(ej.nombre_ejercicio)} className="bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-cyan-500/30 transition-all active:scale-95 flex items-center gap-1"><span className="text-xs md:text-sm">🧬</span> Guía</button>
                               </div>
                               {textoRendimientoAnterior && (
-                                 <div className="bg-white/5 border border-white/10 text-slate-400 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2">👻 Última sesión: {textoRendimientoAnterior} {esCardio?'':'kg'}</div>
+                                 <div className="bg-white/5 border border-white/10 text-slate-400 text-[9px] md:text-[10px] font-black uppercase px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg flex items-center gap-1.5 md:gap-2">👻 Última: {textoRendimientoAnterior} {esCardio?'':'kg'}</div>
                               )}
                             </div>
-                            <p className="text-xs text-slate-500 font-bold mt-3 tracking-[0.1em]">Objetivo: {ej.series_objetivo}x{ej.reps_objetivo} <span className="ml-2 text-cyan-400/70">• ⏱️ {ej.descanso_segundos}s</span></p>
+                            <p className="text-[10px] md:text-xs text-slate-500 font-bold mt-2 md:mt-3 tracking-[0.1em]">Objetivo: {ej.series_objetivo}x{ej.reps_objetivo} <span className="ml-2 text-cyan-400/70">• ⏱️ {ej.descanso_segundos}s</span></p>
                           </div>
                           
-                          <div className="space-y-3 flex-1">
-                            <div className="flex text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-2 mb-2 gap-2">
-                              <div className="w-16 text-center">Set <InfoIcon title="Tipos de Serie" content="N = Normal, W = Calentamiento (No suma a métricas), D = Drop-set"/></div>
+                          <div className="space-y-2 md:space-y-3 flex-1">
+                            <div className="flex text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] px-1 md:px-2 mb-1 md:mb-2 gap-2">
+                              <div className="w-12 md:w-16 text-center">Set <InfoIcon title="Tipos de Serie" content="N = Normal, W = Calentamiento (No suma a métricas), D = Drop-set"/></div>
                               <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Nivel/Vel' : `Peso (${unidad})`}</div>
                               <div className="flex-1 text-center flex items-center justify-center">{esCardio ? 'Minutos' : 'Reps'}</div>
-                              <div className="w-14 text-center">Status</div>
+                              <div className="w-12 md:w-14 text-center">Status</div>
                             </div>
                             {workoutData[ej.id]?.map((set, i) => {
                               const esW = set.tipoSerie === 'W'; const esD = set.tipoSerie === 'D';
-                              let badgeColor = "bg-white/10 text-slate-400";
-                              if (esW) badgeColor = "bg-amber-500/20 text-amber-400 border border-amber-500/30";
-                              if (esD) badgeColor = "bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                              let badgeColor = "bg-white/10 text-slate-400 border-white/5";
+                              if (esW) badgeColor = "bg-amber-500/20 text-amber-400 border-amber-500/30";
+                              if (esD) badgeColor = "bg-rose-500/20 text-rose-400 border-rose-500/30";
 
                               return (
-                              <div key={i} className={`flex items-center gap-2 p-2 rounded-2xl border transition-all duration-300 ${set.completado ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}>
-                                <button onClick={() => toggleTipoSerie(ej.id, i)} disabled={set.completado || esCardio} className={`w-16 h-10 md:h-12 rounded-xl font-black text-xs flex items-center justify-center transition-all ${badgeColor} disabled:opacity-50`}>
-                                  {i + 1} <span className="ml-1 text-[9px]">{set.tipoSerie}</span>
+                              <div key={i} className={`flex items-center gap-2 p-1.5 md:p-2 rounded-xl md:rounded-2xl border transition-all duration-300 ${set.completado ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}>
+                                
+                                {/* HITBOX SEGURO: Botón Set */}
+                                <button onClick={() => toggleTipoSerie(ej.id, i)} disabled={set.completado || esCardio} className={`w-12 md:w-16 h-12 md:h-12 rounded-lg md:rounded-xl font-black text-xs md:text-sm flex flex-col items-center justify-center transition-all border ${badgeColor} disabled:opacity-50`}>
+                                  {i + 1} <span className="text-[7px] md:text-[9px] mt-0.5">{set.tipoSerie}</span>
                                 </button>
 
-                                <div className="flex-1 flex flex-col items-center">
-                                  <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
-                                  {mostrarConversion && set.peso && !esCardio && (<span className="text-[9px] text-cyan-500/50 mt-1 font-bold tracking-widest">{getValorConvertido(set.peso, unidad)}</span>)}
+                                <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
+                                  {/* ANTI-ZOOM: text-base en móvil */}
+                                  <input type="number" step="0.5" value={set.peso} onChange={(e) => updateSet(ej.id, i, 'peso', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
+                                  {mostrarConversion && set.peso && !esCardio && !set.completado && (<span className="text-[8px] text-cyan-500/50 absolute bottom-1 font-bold tracking-widest pointer-events-none">{getValorConvertido(set.peso, unidad)}</span>)}
                                 </div>
-                                <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="flex-1 bg-white/5 disabled:opacity-50 rounded-xl py-3 text-center font-bold text-white outline-none focus:bg-white/10 transition-colors placeholder-slate-600" placeholder="0" />
-                                <button onClick={() => toggleSet(ej.id, i, ej.descanso_segundos)} className={`w-14 h-12 rounded-xl font-black flex items-center justify-center transition-all duration-300 active:scale-90 ${set.completado ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}>✓</button>
+                                <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-lg h-12 overflow-hidden">
+                                  <input type="number" value={set.reps} onChange={(e) => updateSet(ej.id, i, 'reps', e.target.value)} disabled={set.completado} className="w-full h-full bg-transparent disabled:opacity-50 text-center font-bold text-white outline-none focus:bg-white/5 transition-colors placeholder-slate-600 text-base md:text-sm" placeholder="0" />
+                                </div>
+                                
+                                {/* HITBOX SEGURO: Botón Check */}
+                                <button onClick={() => toggleSet(ej.id, i, ej.descanso_segundos)} className={`w-12 md:w-14 h-12 rounded-lg md:rounded-xl font-black text-base flex items-center justify-center transition-all duration-300 active:scale-90 ${set.completado ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}>✓</button>
                               </div>
                             )})}
                           </div>
 
-                          <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center bg-black/20 p-4 rounded-2xl">
-                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
-                              {!esCardio ? <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></> : 'Modo Cardio Activo'}
+                          <div className="mt-6 md:mt-8 pt-4 md:pt-6 border-t border-white/5 flex justify-between items-center bg-black/20 p-3 md:p-4 rounded-xl md:rounded-2xl">
+                            <span className="text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] flex items-center">
+                              {!esCardio ? <>Estimación 1RM <InfoIcon title="One Rep Max" content="Se calcula solo con series Normales (N)."/></> : 'Modo Cardio'}
                             </span>
-                            <span className={`text-sm font-black ${esCardio ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            <span className={`text-xs md:text-sm font-black ${esCardio ? 'text-rose-400' : 'text-emerald-400'}`}>
                               {!esCardio ? (display1RM ? `${display1RM} ${unidad}` : '--') : '❤️ Z2/Z3'}
                             </span>
                           </div>
@@ -1066,8 +1071,9 @@ export default function App() {
             </div>
           </div>
           
+          {/* Botón flotante móvil con safe-area ajustado */}
           {!ejercicioExpandido && (
-             <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-5 rounded-2xl mt-10 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)]">✅ Finalizar Rutina</button>
+             <button onClick={finalizarEntrenamientoHoy} className="lg:hidden w-full bg-gradient-to-r from-emerald-400 to-emerald-600 text-black font-black uppercase tracking-widest py-4 md:py-5 rounded-xl md:rounded-2xl mt-8 active:scale-95 transition-all shadow-[0_0_30px_rgba(52,211,153,0.3)] text-sm">✅ Finalizar Rutina</button>
           )}
         </div>
       )}
